@@ -54,6 +54,15 @@ hs.loadSpoon("AppWindowSwitcher")
 -- :setLogLevel("debug") -- uncomment for console debug log
     :bindHotkeys({
         ["Google Chrome"] = { hyper, ";" },
+        ["Code"] = { hyper, "j" },
+        ["Ghostty"] = { hyper, "k" },
+        ["XCode"] = { hyper, "x" },
+        ["Finder"] = { hyper, "f" },
+        ["Slack"] = { hyper, "l" },
+        ["Hammerspoon"] = { hyper, "h" },
+        ["Docker Desktop"] = { hyper, "d" },
+        ["ChatGPT"] = { hyper, "g" },
+        ["Mail"] = { hyper, "m" },
     })
 
 hs.alert.show("Config loaded")
