@@ -53,6 +53,7 @@ end)
 -- Store window frames for toggle functionality
 local windowFramesU = {}
 local lastCycledWindowIndex = {}
+local distributionRotation = {}
 
 -- Move focused window to center screen and maximize (with toggle)
 hs.hotkey.bind(hyper, "u", function()
@@ -82,6 +83,49 @@ hs.hotkey.bind(hyper, "u", function()
         win:moveToScreen(centerScreen)
         win:maximize()
     end
+end)
+
+-- Distribute all windows of current app across screens (with rotation)
+hs.hotkey.bind(hyper, "n", function()
+    local currentWin = hs.window.focusedWindow()
+    if not currentWin then
+        hs.alert.show("No focused window")
+        return
+    end
+
+    -- Get all windows of the current application
+    local app = currentWin:application()
+    local appName = app:name()
+    local appWindows = app:allWindows()
+
+    -- Filter to only standard windows (exclude minimized, hidden, etc)
+    local visibleWindows = {}
+    for _, win in ipairs(appWindows) do
+        if win:isStandard() and win:isVisible() then
+            table.insert(visibleWindows, win)
+        end
+    end
+
+    -- Sort windows by ID to ensure consistent order
+    table.sort(visibleWindows, function(a, b) return a:id() < b:id() end)
+
+    -- Get all screens
+    local allScreens = hs.screen.allScreens()
+
+    -- Get or initialize rotation offset for this app
+    local rotationOffset = distributionRotation[appName] or 0
+
+    -- Distribute windows across screens with rotation offset
+    for i, win in ipairs(visibleWindows) do
+        local screenIndex = ((i - 1 + rotationOffset) % #allScreens) + 1
+        win:moveToScreen(allScreens[screenIndex])
+        win:maximize()
+    end
+
+    -- Increment rotation offset for next time
+    distributionRotation[appName] = (rotationOffset + 1) % #allScreens
+
+    hs.alert.show("Distributed " .. #visibleWindows .. " windows across " .. #allScreens .. " screens")
 end)
 
 -- Cycle to next window of current app, then move to center screen and maximize
