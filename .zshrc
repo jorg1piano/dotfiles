@@ -16,6 +16,7 @@ claude() {
 
 # Open config files
 alias aliases='code ~/.zshrc'
+alias dotfiles='code ~/dotfiles'
 alias config-zshrc='code ~/dotfiles/.zshrc'
 alias config-tmux='code ~/dotfiles/tmux.conf'
 alias config-hammerspoon='code ~/dotfiles/hammerspoon/init.lua'
