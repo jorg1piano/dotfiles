@@ -18,6 +18,7 @@ claude() {
 alias aliases='code ~/.zshrc'
 alias config-zshrc='code ~/dotfiles/.zshrc'
 alias config-tmux='code ~/dotfiles/tmux.conf'
+alias config-hammerspoon='code ~/dotfiles/hammerspoon/init.lua'
 
 # Mac OS
 alias clip='pbcopy'
