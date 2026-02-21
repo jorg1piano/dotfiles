@@ -50,6 +50,26 @@ hs.hotkey.bind(hyper, "4", function()
     task:start()
 end)
 
+-- Move focused window to center screen and maximize
+hs.hotkey.bind(hyper, "u", function()
+    local win = hs.window.focusedWindow()
+    if not win then
+        hs.alert.show("No focused window")
+        return
+    end
+
+    local allScreens = hs.screen.allScreens()
+    if #allScreens < 2 then
+        hs.alert.show("Only one screen detected")
+        return
+    end
+
+    -- Find center screen (assumes primary/main is center)
+    local centerScreen = hs.screen.primaryScreen()
+    win:moveToScreen(centerScreen)
+    win:maximize()
+end)
+
 hs.loadSpoon("AppWindowSwitcher")
 -- :setLogLevel("debug") -- uncomment for console debug log
     :bindHotkeys({
