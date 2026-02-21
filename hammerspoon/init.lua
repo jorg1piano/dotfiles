@@ -40,7 +40,7 @@ for i, shortcut in ipairs(shortcuts) do
 end
 
 hs.hotkey.bind(hyper, "4", function()
-    local task = hs.task.new("/Users/jorgen/.local/bin/copy-latest-screenshot.sh",
+    local task = hs.task.new("~/.local/bin/copy-latest-screenshot.sh",
         function(exitCode, stdOut, stdErr)
             if exitCode ~= 0 then
                 hs.alert.show("Screenshot copy failed")
