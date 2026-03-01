@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p ./claude-local && tee -a ./claude-local/claude-work-raw.json | jq -r '.prompt' | tee -a ./claude-local/claude-work.log"
+          }
+        ]
+      }
+    ]
+  }
+}
