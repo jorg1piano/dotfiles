@@ -1,18 +1,19 @@
 claude() {
+  local target_window="${CLAUDE_TARGET_WINDOW:-#W}"
   if [ -n "$TMUX" ]; then
     # Save current window name and append robot icon if not present
-    local current_name=$(tmux display-message -p '#W')
+    local current_name=$(tmux display-message -p -t "$target_window" '#W')
     if [[ "$current_name" != *"🤖" ]]; then
-      tmux rename-window "${current_name} 🤖"
+      tmux rename-window -t "$target_window" "${current_name} 🤖"
     fi
-    tmux set-window-option monitor-silence 10
+    tmux set-window-option -t "$target_window" monitor-silence 10
   fi
   command claude "$@"
   if [ -n "$TMUX" ]; then
     # Remove robot icon and restore name
-    local updated_name=$(tmux display-message -p '#W')
-    tmux rename-window "${updated_name% 🤖}"
-    tmux set-window-option monitor-silence 0
+    local updated_name=$(tmux display-message -p -t "$target_window" '#W')
+    tmux rename-window -t "$target_window" "${updated_name% 🤖}"
+    tmux set-window-option -t "$target_window" monitor-silence 0
   fi
 }
 
