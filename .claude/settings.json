@@ -1,0 +1,60 @@
+{
+  "alwaysThinkingEnabled": true,
+  "effortLevel": "medium",
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "command": "osascript -e 'display notification \"Claude needs your input\" with title \"Claude Code\"'",
+            "type": "command"
+          },
+          {
+            "command": "afplay /System/Library/Sounds/Glass.aiff",
+            "type": "command"
+          },
+          {
+            "command": "printf '\\a'",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/tmux-status.sh idle"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/tmux-status.sh working"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(afplay:*)",
+      "Bash(flutter pub:*)",
+      "Bash(find:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter test:*)",
+      "Bash(flutter build:*)",
+      "Bash(flutter run:*)",
+      "Bash(flutter clean:*)",
+      "Bash(dart analyze:*)",
+      "Bash(dart format:*)",
+      "Bash(just gql:*)",
+      "Bash(asdf:*)"
+    ]
+  }
+}

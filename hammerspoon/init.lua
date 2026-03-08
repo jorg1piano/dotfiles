@@ -40,14 +40,15 @@ for i, shortcut in ipairs(shortcuts) do
 end
 
 hs.hotkey.bind(hyper, "4", function()
-    local task = hs.task.new("~/.local/bin/copy-latest-screenshot.sh",
-        function(exitCode, stdOut, stdErr)
-            if exitCode ~= 0 then
-                hs.alert.show("Screenshot copy failed")
-            end
-        end
-    )
-    task:start()
+    local image = hs.pasteboard.readImage()
+    if not image then
+        hs.alert.show("No image in clipboard")
+        return
+    end
+    local path = "/tmp/clipboard-screenshot.png"
+    image:saveToFile(path)
+    hs.task.new("/bin/bash", nil, {"-c", "echo -n " .. path .. " | pbcopy"}):start()
+    hs.alert.show("Copied path")
 end)
 
 -- Store window frames for toggle functionality
