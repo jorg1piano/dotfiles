@@ -31,6 +31,7 @@ shortcuts = {
     { "'", "Docker Desktop" },
     { "g", "ChatGPT" },
     { "m", "com.apple.mail" },
+    { "e", "qemu-system-aarch64" },
 }
 
 for i, shortcut in ipairs(shortcuts) do
@@ -186,6 +187,7 @@ hs.loadSpoon("AppWindowSwitcher")
         ["Docker Desktop"] = { hyper, "d" },
         ["ChatGPT"] = { hyper, "g" },
         ["Mail"] = { hyper, "m" },
+        ["qemu-system-aarch64"] = { hyper, "e" },
     })
 
 hs.alert.show("Config loaded")
