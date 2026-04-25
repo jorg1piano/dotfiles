@@ -28,3 +28,14 @@ gcb() {
     selected=$(git --no-pager branch --sort=-committerdate | sed 's/^..//' | fzf)
 }
 
+alias_add() {
+    local def="$*"
+    local name="${def%%=*}"
+    local cmd="${def#*=}"
+    name="${name// /}"
+    cmd="${cmd# }"
+    echo "alias ${name}=\"${cmd}\"" >> ~/.zshrc
+    source ~/.zshrc
+    echo "added: alias ${name}=\"${cmd}\""
+}
+
