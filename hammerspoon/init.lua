@@ -190,4 +190,35 @@ hs.loadSpoon("AppWindowSwitcher")
         ["qemu-system-aarch64"] = { hyper, "e" },
     })
 
+-- Half-screen screenshots: hyper+shift+1..6 captures the matching half to clipboard.
+-- Screens sorted left-to-right; each screen contributes two halves (left then right).
+-- 1 = screen 1 left, 2 = screen 1 right, 3 = screen 2 left, 4 = screen 2 right, ...
+local function captureHalf(index)
+    local screens = hs.screen.allScreens()
+    table.sort(screens, function(a, b) return a:frame().x < b:frame().x end)
+    local screenIdx = math.floor((index - 1) / 2) + 1
+    local isRight = (index % 2 == 0)
+    local screen = screens[screenIdx]
+    if not screen then
+        hs.alert.show("No screen at index " .. screenIdx)
+        return
+    end
+    local f = screen:frame()
+    local halfW = math.floor(f.w / 2)
+    local x = isRight and (f.x + halfW) or f.x
+    local rect = string.format("%d,%d,%d,%d", x, f.y, halfW, f.h)
+    hs.task.new("/usr/sbin/screencapture", function(exitCode)
+        if exitCode == 0 then
+            hs.alert.show("Half " .. index .. " → clipboard")
+        else
+            hs.alert.show("Capture failed (" .. exitCode .. ")")
+        end
+    end, { "-c", "-x", "-R", rect }):start()
+end
+
+local hyperShift = { "cmd", "alt", "ctrl", "shift" }
+for i = 1, 6 do
+    hs.hotkey.bind(hyperShift, tostring(i), function() captureHalf(i) end)
+end
+
 hs.alert.show("Config loaded")
