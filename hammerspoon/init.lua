@@ -32,6 +32,7 @@ shortcuts = {
     { "g", "ChatGPT" },
     { "m", "com.apple.mail" },
     { "e", "qemu-system-aarch64" },
+    { "p", "1Password" },
 }
 
 for i, shortcut in ipairs(shortcuts) do
@@ -188,6 +189,7 @@ hs.loadSpoon("AppWindowSwitcher")
         ["ChatGPT"] = { hyper, "g" },
         ["Mail"] = { hyper, "m" },
         ["qemu-system-aarch64"] = { hyper, "e" },
+        ["1Password"] = { hyper, "p" },
     })
 
 -- Half-screen screenshots: hyper+shift+1..6 captures the matching half to clipboard.
