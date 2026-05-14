@@ -40,7 +40,7 @@ for i, shortcut in ipairs(shortcuts) do
     end)
 end
 
-hs.hotkey.bind(hyper, "4", function()
+hs.hotkey.bind(hyper, "0", function()
     local image = hs.pasteboard.readImage()
     if not image then
         hs.alert.show("No image in clipboard")
@@ -216,9 +216,54 @@ local function captureHalf(index)
     end, { "-c", "-x", "-R", rect }):start()
 end
 
-local hyperShift = { "cmd", "alt", "ctrl", "shift" }
 for i = 1, 6 do
-    hs.hotkey.bind(hyperShift, tostring(i), function() captureHalf(i) end)
+    hs.hotkey.bind(hyper, tostring(i), function() captureHalf(i) end)
 end
+
+-- hyper+c: arrange Chrome windows in a 3-column split on the leftmost screen.
+-- Repeated presses rotate which windows occupy the slots (deterministic).
+local chromeRotation = 0
+hs.hotkey.bind(hyper, "c", function()
+    local chrome = hs.application.get("Google Chrome")
+    if not chrome then
+        hs.alert.show("Chrome not running")
+        return
+    end
+
+    local windows = {}
+    for _, w in ipairs(chrome:allWindows()) do
+        if w:isStandard() and w:isVisible() then
+            table.insert(windows, w)
+        end
+    end
+    if #windows == 0 then
+        hs.alert.show("No Chrome windows")
+        return
+    end
+    table.sort(windows, function(a, b) return a:id() < b:id() end)
+
+    local screens = hs.screen.allScreens()
+    table.sort(screens, function(a, b) return a:frame().x < b:frame().x end)
+    local screen = screens[1]
+    local f = screen:frame()
+    local colW = math.floor(f.w / 3)
+
+    local slots = math.min(3, #windows)
+    for slot = 1, slots do
+        local idx = ((chromeRotation + slot - 1) % #windows) + 1
+        local w = windows[idx]
+        w:moveToScreen(screen)
+        w:setFrame({
+            x = f.x + colW * (slot - 1),
+            y = f.y,
+            w = (slot == 3) and (f.w - colW * 2) or colW,
+            h = f.h,
+        })
+        w:raise()
+    end
+
+    chromeRotation = (chromeRotation + 1) % #windows
+    hs.alert.show("Chrome split (rotation " .. chromeRotation .. "/" .. #windows .. ")")
+end)
 
 hs.alert.show("Config loaded")
