@@ -33,6 +33,7 @@ shortcuts = {
     { "m", "com.apple.mail" },
     { "e", "qemu-system-aarch64" },
     { "p", "1Password" },
+    { "s", "Simulator" },
 }
 
 for i, shortcut in ipairs(shortcuts) do
@@ -190,6 +191,7 @@ hs.loadSpoon("AppWindowSwitcher")
         ["Mail"] = { hyper, "m" },
         ["qemu-system-aarch64"] = { hyper, "e" },
         ["1Password"] = { hyper, "p" },
+        ["Simulator"] = { hyper, "s" },
     })
 
 -- Half-screen screenshots: hyper+shift+1..6 captures the matching half to clipboard.
