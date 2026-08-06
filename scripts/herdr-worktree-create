@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Prompt for a branch name, create the worktree with `sdf worktree`, then open
+# it as a Herdr workspace. Bound to prefix+shift+g in herdr/config.toml.
+#
+# The new branch is based on the current HEAD, so triggering this from inside a
+# worktree branches off that worktree's branch (this is `sdf worktree create`'s
+# own behaviour). If the branch already exists it is mounted or reopened
+# instead of failing.
+set -euo pipefail
+
+trap 'printf "\npress enter to close..."; read -r' ERR
+
+base=$(git rev-parse --abbrev-ref HEAD)
+printf 'New branch (based on %s): ' "$base"
+read -r branch
+if [ -z "$branch" ]; then
+    echo "branch name cannot be empty" >&2
+    exit 1
+fi
+
+# Herdr refuses worktree actions sourced from a linked worktree, so anchor on
+# the main checkout — the current one may itself be a worktree.
+repo=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+
+worktree_path() {
+    git -C "$repo" worktree list --porcelain | awk -v b="branch refs/heads/$branch" '
+        /^worktree /{p = substr($0, 10)}
+        $0 == b {print p; exit}
+    '
+}
+
+path=$(worktree_path)
+if [ -n "$path" ]; then
+    echo "$branch is already checked out at $path — reopening"
+elif git show-ref --verify --quiet "refs/heads/$branch" ||
+    git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+    echo "$branch already exists — mounting it instead of branching off $base"
+    sdf worktree mount "$branch" --no-tmux
+else
+    sdf worktree create "$branch" --no-tmux
+fi
+
+path=${path:-$(worktree_path)}
+if [ -z "$path" ]; then
+    echo "could not locate a worktree for $branch" >&2
+    exit 1
+fi
+
+herdr worktree open --cwd "$repo" --path "$path" --label "$branch" --focus
