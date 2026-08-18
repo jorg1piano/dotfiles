@@ -1,3 +1,4 @@
+onboarding = false
 [keys]
 # Press the Herdr prefix (Ctrl-b by default), then an arrow key to focus
 # the adjacent pane.
@@ -5,3 +6,126 @@ focus_pane_left = "prefix+left"
 focus_pane_right = "prefix+right"
 focus_pane_up = "prefix+up"
 focus_pane_down = "prefix+down"
+
+# Jump back to the last pane actually visited (tmux's prefix+l), moved off l so
+# it does not shadow the vim-style hjkl keys. last_pane is most-recently-used and
+# global, unlike previous_workspace, which just steps up the spaces list.
+last_pane = "prefix+alt+l"
+
+# Free prefix+shift+g (Herdr's built-in new_worktree) for the folder picker below.
+# Worktree creation lives on prefix+alt+g via `sdf worktree create`, which also
+# copies .gitignored files, so the builtin was redundant.
+new_worktree = ""
+
+# Create a worktree with `sdf worktree create`, then open it in Herdr.
+[[keys.command]]
+key = "prefix+alt+g"
+type = "popup"
+command = "$HOME/dotfiles/herdr/scripts/sdf-worktree-open.sh create"
+width = "70%"
+height = "40%"
+
+# Mount an existing branch with `sdf worktree mount`, then open it in Herdr.
+[[keys.command]]
+key = "prefix+alt+m"
+type = "popup"
+command = "$HOME/dotfiles/herdr/scripts/sdf-worktree-open.sh mount"
+width = "80%"
+height = "70%"
+
+# prefix+g (goto) for folders: fuzzy-pick anything under ~/github and focus its
+# space, opening one if it is not already up.
+[[keys.command]]
+key = "prefix+shift+g"
+type = "popup"
+command = "$HOME/dotfiles/herdr/scripts/herdr-goto-folder.sh"
+width = "70%"
+height = "60%"
+
+# Reorder the focused space. Herdr has no built-in move action, so these shell
+# out to the socket API (workspace.move).
+[[keys.command]]
+key = "prefix+alt+k"
+type = "shell"
+command = "$HOME/dotfiles/herdr/scripts/herdr-move-workspace.py up"
+
+[[keys.command]]
+key = "prefix+alt+j"
+type = "shell"
+command = "$HOME/dotfiles/herdr/scripts/herdr-move-workspace.py down"
+
+# Same actions as direct chords, so a space can be dragged several slots without
+# re-entering prefix mode each time. Herdr has no way to scope a custom command
+# to sidebar focus, so these are global.
+[[keys.command]]
+key = "ctrl+alt+k"
+type = "shell"
+command = "$HOME/dotfiles/herdr/scripts/herdr-move-workspace.py up"
+
+[[keys.command]]
+key = "ctrl+alt+j"
+type = "shell"
+command = "$HOME/dotfiles/herdr/scripts/herdr-move-workspace.py down"
+
+# Pop the current worktree with `sdf worktree pop`, then close its workspace.
+[[keys.command]]
+key = "prefix+alt+shift+g"
+type = "popup"
+command = "$HOME/dotfiles/herdr/scripts/sdf-worktree-pop.sh"
+width = "70%"
+height = "40%"
+
+# Jump back to the space visited before this one (most-recently-used, tmux's
+# prefix+l for spaces). Herdr's previous_workspace only steps up the sidebar list,
+# so the MRU pair is tracked by the local lastspace plugin (herdr/plugins/last-space).
+[[keys.command]]
+key = "prefix+shift+l"
+type = "plugin_action"
+command = "jorgen.lastspace.jump"
+
+# Toggle the reviewr code-review sidebar (persiyanov/herdr-reviewr).
+[[keys.command]]
+key = "cmd+r"
+type = "plugin_action"
+command = "persiyanov.reviewr.toggle"
+
+# Open the active pane's directory in VS Code.
+[[keys.command]]
+key = "prefix+alt+c"
+type = "shell"
+command = "code \"${HERDR_ACTIVE_PANE_CWD:-$PWD}\""
+
+# Pick a command run in the active pane and yank it with all of its output.
+[[keys.command]]
+key = "prefix+shift+["
+type = "popup"
+command = "$HOME/dotfiles/herdr/scripts/herdr-yank-command.sh"
+width = "85%"
+height = "80%"
+
+# Scratch command popup: type any command, exit / ctrl+d closes it.
+# Opens in the active pane's cwd, without touching the tab layout.
+[[keys.command]]
+key = "prefix+alt+comma"
+type = "popup"
+command = "$SHELL -l"
+width = "80%"
+height = "60%"
+
+# Rename the focused tab, tmux-style (prefix+,). Popup so the prompt is interactive.
+[[keys.command]]
+key = "prefix+comma"
+type = "popup"
+command = "$HOME/dotfiles/herdr/scripts/herdr-rename-tab.sh"
+width = "60%"
+height = "20%"
+
+# Jump to the first space in the sidebar list.
+[[keys.command]]
+key = "prefix+h"
+type = "shell"
+command = "$HOME/dotfiles/herdr/scripts/herdr-focus-first-workspace.sh"
+
+[theme]
+name = "catppuccin"
+auto_switch = false
