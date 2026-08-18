@@ -8,7 +8,7 @@
 # instead of failing.
 set -euo pipefail
 
-trap 'printf "\npress enter to close..."; read -r' ERR
+trap 'printf "\nfailed at line %s (exit %s). press enter to close..." "$LINENO" "$?"; read -r' ERR
 
 base=$(git rev-parse --abbrev-ref HEAD)
 printf 'New branch (based on %s): ' "$base"
@@ -23,9 +23,11 @@ fi
 repo=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
 
 worktree_path() {
+    # awk must not exit early: that closes the pipe while git is still writing,
+    # and pipefail turns the resulting SIGPIPE into a failed lookup.
     git -C "$repo" worktree list --porcelain | awk -v b="branch refs/heads/$branch" '
         /^worktree /{p = substr($0, 10)}
-        $0 == b {print p; exit}
+        $0 == b && !found {print p; found = 1}
     '
 }
 

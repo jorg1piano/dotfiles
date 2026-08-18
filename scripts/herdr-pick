@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Scan the focused pane's recent output, list the copyable things in it
+# (URLs, branches, paths, SHAs, ...), and copy the pick to the clipboard.
+# Bound to prefix+' as a popup command; see herdr/config.toml.
+set -euo pipefail
+
+LINES=${HERDR_PICK_LINES:-1000}
+LOG=${HERDR_PICK_LOG:-${TMPDIR:-/tmp}/herdr-pick.log}
+
+# The popup inherits a login-less PATH, so Homebrew's bin may be missing.
+PATH=$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin
+
+# The popup closes the moment we exit, so an error has to be held on screen.
+# stdin is not always a terminal here, hence /dev/tty and the log fallback.
+die() {
+    printf 'herdr-pick: %s\n' "$*" | tee -a "$LOG" >&2
+    if [ -e /dev/tty ]; then
+        printf '\npress enter to close ' >&2
+        read -r _ </dev/tty || true
+    fi
+    exit 1
+}
+
+trap 'status=$?; trap - ERR; die "failed at line $LINENO (exit $status)"' ERR
+
+command -v fzf >/dev/null || die "fzf is not on PATH (brew install fzf)"
+command -v jq >/dev/null || die "jq is not on PATH (brew install jq)"
+[ "${HERDR_ENV:-}" = 1 ] || die "not running inside a Herdr pane"
+
+# The popup is its own pane, so the source is the focused pane that is not us.
+# HERDR_WORKSPACE_ID is not always exported into the popup; unfiltered still
+# works because the jq below prefers the focused pane and our own tab anyway.
+if [ -n "${HERDR_WORKSPACE_ID:-}" ]; then
+    panes=$(herdr pane list --workspace "$HERDR_WORKSPACE_ID" 2>&1) ||
+        die "herdr pane list failed: $panes"
+else
+    panes=$(herdr pane list 2>&1) || die "herdr pane list failed: $panes"
+fi
+
+source_pane=$(
+    printf '%s' "$panes" |
+        jq -r --arg own "${HERDR_PANE_ID:-}" --arg tab "${HERDR_TAB_ID:-}" '
+            .result.panes as $all
+            | [$all[] | select(.pane_id != $own)] as $others
+            | ($others | map(select(.focused))) as $focused
+            | ($others | map(select(.tab_id == $tab))) as $sibling
+            | (($focused + $sibling + $others + $all)[0].pane_id // "")
+        '
+)
+[ -n "$source_pane" ] || die "no other pane to read"
+
+text=$(herdr pane read "$source_pane" --source recent-unwrapped --lines "$LINES" --format text)
+
+candidates=$(printf '%s' "$text" | perl -0777 -ne '
+    my @pats = (
+        ["url",    qr{(?:https?|ftp)://[^\s"'"'"'`<>()\[\]{}|\\]+}],
+        ["branch", qr{\((?<m>[A-Za-z0-9._/+-]{1,60})\)\s*[\$#>%]}],
+        ["branch", qr{^\s*\*\s+(?<m>[A-Za-z0-9._/+-]+)\s*$}],
+        ["branch", qr{\bOn branch (?<m>\S+)}],
+        ["email",  qr{[\w.+-]+\@[\w-]+\.[\w.-]*\w}],
+        ["addr",   qr{\b(?:(?:\d{1,3}\.){3}\d{1,3}|localhost)(?::\d+)\b}],
+        ["uuid",   qr{\b[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\b}],
+        ["sha",    qr{\b[0-9a-f]{7,40}\b}],
+        ["path",   qr{(?<![\w@/.~-])(?:~|\.{1,2})?/?[\w.@+-]+(?:/[\w.@+-]+)+/?}],
+        ["hex",    qr{#[0-9a-fA-F]{6}\b}],
+    );
+    my (@out, %seen);
+    # Bottom-up: the most recent output is what you usually want.
+    for my $line (reverse split /\n/) {
+        my @claimed;
+        for my $p (@pats) {
+            my ($kind, $re) = @$p;
+            while ($line =~ /$re/g) {
+                my ($s, $e) = ($-[0], $+[0]);
+                my $val = defined $+{m} ? $+{m} : $&;
+                next if grep { $s < $_->[1] && $e > $_->[0] } @claimed;
+                push @claimed, [$s, $e];
+                $val =~ s/[.,;:!?)\]}>"'"'"']+$//;
+                next if length($val) < 3 || $seen{$val}++;
+                push @out, "$kind\t$val";
+            }
+        }
+    }
+    print "$_\n" for @out;
+')
+[ -n "$candidates" ] || die "nothing copyable found in $source_pane"
+
+picked=$(
+    printf '%s\n' "$candidates" |
+        fzf --multi --exact --no-sort --height=100% --border \
+            --delimiter='\t' --with-nth='1,2' --nth=1,2 \
+            --prompt='copy > ' \
+            --header="$source_pane — type a kind (url/branch/path/sha/…) to narrow · enter: copy · ctrl-p: copy + paste into pane · tab: multi-select" \
+            --expect=ctrl-p
+) || exit 0
+
+key=$(printf '%s\n' "$picked" | head -1)
+values=$(printf '%s\n' "$picked" | tail -n +2 | cut -f2-)
+[ -n "$values" ] || exit 0
+
+printf '%s' "$values" | pbcopy
+if [ "$key" = "ctrl-p" ]; then
+    herdr pane send-text "$source_pane" "$values"
+fi
+exit 0

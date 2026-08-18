@@ -42,18 +42,6 @@ for i, shortcut in ipairs(shortcuts) do
     end)
 end
 
-hs.hotkey.bind(hyper, "0", function()
-    local image = hs.pasteboard.readImage()
-    if not image then
-        hs.alert.show("No image in clipboard")
-        return
-    end
-    local path = "/tmp/clipboard-screenshot.png"
-    image:saveToFile(path)
-    hs.task.new("/bin/bash", nil, {"-c", "echo -n " .. path .. " | pbcopy"}):start()
-    hs.alert.show("Copied path")
-end)
-
 -- Screens ordered left-to-right
 local function sortedScreens()
     local screens = hs.screen.allScreens()
@@ -246,6 +234,47 @@ end
 for i = 1, 6 do
     hs.hotkey.bind(hyper, tostring(i), function() captureHalf(i) end)
 end
+
+-- hyper+7: capture the whole center screen and append it to a collection.
+-- The clipboard holds the newline-separated paths of everything collected so far,
+-- so repeated presses build up a set of screenshots to paste in one go.
+-- hyper+0 clears the collection.
+local captureDir = os.getenv("HOME") .. "/Desktop/hs-captures"
+local capturedPaths = {}
+
+local function setClipboardToCaptures()
+    hs.pasteboard.setContents(table.concat(capturedPaths, "\n"))
+end
+
+hs.hotkey.bind(hyper, "7", function()
+    local screen = hs.screen.primaryScreen()
+    if not screen then
+        hs.alert.show("No center screen")
+        return
+    end
+
+    hs.fs.mkdir(captureDir)
+    local f = screen:fullFrame()
+    local rect = string.format("%d,%d,%d,%d", f.x, f.y, f.w, f.h)
+    local path = string.format("%s/capture-%s-%d.png", captureDir, os.date("%Y%m%d-%H%M%S"), #capturedPaths + 1)
+
+    hs.task.new("/usr/sbin/screencapture", function(exitCode)
+        if exitCode ~= 0 then
+            hs.alert.show("Capture failed (" .. exitCode .. ")")
+            return
+        end
+        table.insert(capturedPaths, path)
+        setClipboardToCaptures()
+        hs.alert.show(string.format("Captured center screen (%d in array)", #capturedPaths))
+    end, { "-x", "-R", rect, path }):start()
+end)
+
+hs.hotkey.bind(hyper, "0", function()
+    local count = #capturedPaths
+    capturedPaths = {}
+    setClipboardToCaptures()
+    hs.alert.show(string.format("Cleared %d capture%s", count, count == 1 and "" or "s"))
+end)
 
 -- hyper+c: arrange Chrome windows in a 3-column split on the leftmost screen.
 -- Repeated presses rotate which windows occupy the slots (deterministic).

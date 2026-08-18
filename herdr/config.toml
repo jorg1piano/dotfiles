@@ -126,6 +126,15 @@ key = "prefix+h"
 type = "shell"
 command = "$HOME/dotfiles/herdr/scripts/herdr-focus-first-workspace.sh"
 
+# prefix+' scans the focused pane's recent output for copyable tokens (URLs,
+# branches, paths, SHAs, ...) and copies the pick to the clipboard.
+[[keys.command]]
+key = "prefix+'"
+type = "popup"
+command = "herdr-pick"
+width = "70%"
+height = "60%"
+
 [theme]
 name = "catppuccin"
 auto_switch = false
