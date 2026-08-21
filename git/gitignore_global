@@ -7,3 +7,5 @@
 # Editors
 .idea/
 *.swp
+
+**/.claude/settings.local.json
