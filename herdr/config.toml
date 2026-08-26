@@ -141,7 +141,7 @@ command = "$HOME/dotfiles/herdr/scripts/herdr-focus-first-workspace.sh"
 [[keys.command]]
 key = "prefix+'"
 type = "popup"
-command = "herdr-pick"
+command = "$HOME/dotfiles/scripts/herdr-pick"
 width = "70%"
 height = "60%"
 
