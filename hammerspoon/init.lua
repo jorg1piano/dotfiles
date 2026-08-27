@@ -354,4 +354,57 @@ hs.hotkey.bind(hyper, "t", function()
     hs.alert.show(string.format("Tiled %d %s windows across %d halves", #windows, app:name(), #halves))
 end)
 
+-- hyper+o: tile every window of the frontmost app on the screen it already lives on.
+-- Up to three windows go side by side as columns; four or more fall into the squarest
+-- grid that fits them, filled left-to-right then top-to-bottom. Nothing moves between
+-- screens, so this is the single-screen counterpart to hyper+t.
+local function gridShape(count)
+    if count <= 3 then
+        return count, 1
+    end
+    local cols = math.ceil(math.sqrt(count))
+    return cols, math.ceil(count / cols)
+end
+
+hs.hotkey.bind(hyper, "o", function()
+    local focused = hs.window.focusedWindow()
+    if not focused then
+        hs.alert.show("No focused window")
+        return
+    end
+
+    local app = focused:application()
+    local windows = visibleStandardWindows(app)
+    if #windows == 0 then
+        hs.alert.show("No windows to tile")
+        return
+    end
+
+    -- The focused window's screen, not the primary one: tile where the eyes already are.
+    local screen = focused:screen()
+    local f = screen:frame()
+    local cols, rows = gridShape(#windows)
+    local cellW = math.floor(f.w / cols)
+    local cellH = math.floor(f.h / rows)
+
+    for i, win in ipairs(windows) do
+        local col = (i - 1) % cols
+        local row = math.floor((i - 1) / cols)
+        -- Windows parked on another screen get pulled in first; setFrame alone is
+        -- unreliable across a screen boundary.
+        win:moveToScreen(screen)
+        -- The right column and bottom row absorb the rounding remainder so the
+        -- tiling covers the full frame instead of leaving a sliver of desktop.
+        win:setFrame({
+            x = f.x + cellW * col,
+            y = f.y + cellH * row,
+            w = (col == cols - 1) and (f.w - cellW * col) or cellW,
+            h = (row == rows - 1) and (f.h - cellH * row) or cellH,
+        })
+        win:raise()
+    end
+
+    hs.alert.show(string.format("Tiled %d %s windows in %dx%d", #windows, app:name(), cols, rows))
+end)
+
 hs.alert.show("Config loaded")
