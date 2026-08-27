@@ -1,0 +1,29 @@
+id = "jorgen.panecontext"
+name = "panecontext"
+version = "0.1.0"
+# pane.agent_status_changed hooks, pane metadata tokens and pane.graphics.set all
+# land in 0.8.0; nothing older has been checked.
+min_herdr_version = "0.8.0"
+description = "Summarize what each agent pane is working on and show it across the top of the pane."
+platforms = ["macos", "linux"]
+
+# Herdr reports a status change per turn edge (working on submit, idle or blocked
+# when the turn settles), which is the cheapest trigger that still tracks the work:
+# no polling, and at most a couple of summaries per turn. The hook itself returns
+# immediately and does the model call in a detached child, so a slow summary never
+# holds up the event queue.
+[[events]]
+on = "pane.agent_status_changed"
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/summarize.sh\" hook"]
+
+[[actions]]
+id = "now"
+title = "panecontext: summarize this pane"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/summarize.sh\" now"]
+
+[[actions]]
+id = "clear"
+title = "panecontext: clear this pane's summary"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/summarize.sh\" clear"]

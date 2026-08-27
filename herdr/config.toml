@@ -185,6 +185,6 @@ name = "catppuccin"
 auto_switch = false
 
 # Pane graphics overlays, used by the pane-context plugin to draw the current
-# work summary in the pane's top-right corner (herdr_plugins/pane_context).
+# work summary in the pane's top-right corner (herdr/plugins/pane_context).
 [experimental]
 kitty_graphics = true
