@@ -49,6 +49,14 @@ source_pane=$(
 )
 [ -n "$source_pane" ] || die "no other pane to read"
 
+source_cwd=$(
+    printf '%s' "$panes" |
+        jq -r --arg id "$source_pane" '
+            [.result.panes[] | select(.pane_id == $id)][0]
+            | (.foreground_cwd // .cwd // "")
+        '
+)
+
 text=$(herdr pane read "$source_pane" --source recent-unwrapped --lines "$LINES" --format text)
 
 candidates=$(printf '%s' "$text" | perl -0777 -ne '
@@ -83,6 +91,44 @@ candidates=$(printf '%s' "$text" | perl -0777 -ne '
     }
     print "$_\n" for @out;
 ')
+# `.iex.exs` binds its helpers as anonymous functions, so they are callable
+# only as `name.(args)`. The file is the project's, not the pane's output, so
+# the handles are offered whether or not an iex session has printed them.
+iex_file=""
+if [ -n "$source_cwd" ] && [ -d "$source_cwd" ]; then
+    root=$(git -C "$source_cwd" rev-parse --show-toplevel 2>/dev/null) || root=$source_cwd
+    for f in "$source_cwd/.iex.exs" $(find "$root" -maxdepth 2 -name .iex.exs 2>/dev/null); do
+        if [ -f "$f" ]; then
+            iex_file=$f
+            break
+        fi
+    done
+fi
+
+if [ -n "$iex_file" ]; then
+    handles=$(perl -ne '
+        next unless /^\s*([a-z_][A-Za-z0-9_]*)\s*=\s*(\S.*?)\s*$/;
+        my ($name, $rhs) = ($1, $2);
+        my $call;
+        if ($rhs =~ /^fn\s*(.*?)\s*->/) {
+            my $args = $1;
+            $args =~ s/\s+//g;
+            $call = "$name.($args)";
+        } elsif ($rhs =~ /^&/) {
+            $call = "$name.()";
+        } elsif (exists $bound{$rhs}) {
+            # `geo_on = sim_on` rebinds an earlier handle under a new name.
+            $call = $bound{$rhs};
+            $call =~ s/^[^.]+/$name/;
+        } else {
+            next;
+        }
+        $bound{$name} = $call;
+        print "iex\t$call\n";
+    ' "$iex_file")
+    candidates=$(printf '%s\n%s\n' "$candidates" "$handles" | sed '/^$/d')
+fi
+
 [ -n "$candidates" ] || die "nothing copyable found in $source_pane"
 
 picked=$(
@@ -90,7 +136,7 @@ picked=$(
         fzf --multi --exact --no-sort --height=100% --border \
             --delimiter='\t' --with-nth='1,2' --nth=1,2 \
             --prompt='copy > ' \
-            --header="$source_pane — type a kind (url/branch/path/sha/…) to narrow · enter: copy · ctrl-p: copy + paste into pane · tab: multi-select" \
+            --header="$source_pane — type a kind (url/branch/path/sha/iex/…) to narrow · enter: copy · ctrl-p: copy + paste into pane · tab: multi-select" \
             --expect=ctrl-p
 ) || exit 0
 

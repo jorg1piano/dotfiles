@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# Reclaim disk: prune Docker (dangling/unused images, build cache, stopped
+# containers) and delete throwaway Android AVDs. AVDs matching AVD_PATTERN
+# (default: wet-*, the per-worktree emulators wet creates) are deleted unless
+# an emulator is currently running them. Everything else in ~/.android/avd
+# is left alone.
+#
+#   prune-images            show what would go, ask before deleting
+#   prune-images -y         don't ask
+#   prune-images --volumes  also prune unused Docker volumes
+#   prune-images --all-avds delete every AVD, not just wet-*
+set -euo pipefail
+
+PATH=$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/Library/Android/sdk/cmdline-tools/latest/bin:$HOME/Library/Android/sdk/platform-tools
+
+AVD_PATTERN=${AVD_PATTERN:-wet-*}
+AVD_HOME=${ANDROID_AVD_HOME:-$HOME/.android/avd}
+yes=0 volumes=0
+
+for arg in "$@"; do
+    case $arg in
+        -y|--yes) yes=1 ;;
+        --volumes) volumes=1 ;;
+        --all-avds) AVD_PATTERN='*' ;;
+        -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
+        *) printf 'prune-images: unknown flag %s\n' "$arg" >&2; exit 2 ;;
+    esac
+done
+
+confirm() {
+    [ "$yes" = 1 ] && return 0
+    printf '%s [y/N] ' "$1"
+    read -r reply
+    [[ $reply == [yY]* ]]
+}
+
+# Names of AVDs an emulator process is currently running.
+running_avds() {
+    pgrep -fl 'emulator.*-avd' 2>/dev/null | sed -nE 's/.*-avd[ =]([^ ]+).*/\1/p' | sort -u
+}
+
+# ---- Android AVDs ----------------------------------------------------------
+if [ -d "$AVD_HOME" ]; then
+    running=$(running_avds)
+    to_delete=()
+    for ini in "$AVD_HOME"/$AVD_PATTERN.ini; do
+        [ -e "$ini" ] || continue
+        name=$(basename "$ini" .ini)
+        if grep -qx "$name" <<<"$running"; then
+            printf 'keeping %s (emulator running)\n' "$name"
+            continue
+        fi
+        to_delete+=("$name")
+    done
+
+    if [ ${#to_delete[@]} -eq 0 ]; then
+        echo "no AVDs matching '$AVD_PATTERN' to delete"
+    else
+        echo "AVDs to delete:"
+        for name in "${to_delete[@]}"; do
+            printf '  %-32s %s\n' "$name" "$(du -sh "$AVD_HOME/$name.avd" 2>/dev/null | cut -f1)"
+        done
+        if confirm "delete ${#to_delete[@]} AVD(s)?"; then
+            for name in "${to_delete[@]}"; do
+                if command -v avdmanager >/dev/null; then
+                    avdmanager delete avd -n "$name" >/dev/null 2>&1 \
+                        || rm -rf "$AVD_HOME/$name.avd" "$AVD_HOME/$name.ini"
+                else
+                    rm -rf "$AVD_HOME/$name.avd" "$AVD_HOME/$name.ini"
+                fi
+                echo "deleted $name"
+            done
+        fi
+    fi
+else
+    echo "no AVD directory at $AVD_HOME"
+fi
+
+# ---- Docker ----------------------------------------------------------------
+if ! command -v docker >/dev/null || ! docker info >/dev/null 2>&1; then
+    echo "docker not running, skipping"
+    exit 0
+fi
+
+echo
+docker system df
+flags=(--all --force)
+[ "$volumes" = 1 ] && flags+=(--volumes)
+what="stopped containers, unused images, networks and build cache"
+[ "$volumes" = 1 ] && what="$what, unused volumes"
+if confirm "docker system prune ($what)?"; then
+    docker system prune "${flags[@]}"
+fi
