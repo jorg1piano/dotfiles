@@ -184,6 +184,13 @@ height = "60%"
 name = "catppuccin"
 auto_switch = false
 
+# Show the pane-context metadata token in the agents sidebar row. The plugin
+# writes this as `$summary`; without this row override Herdr's default agents
+# list shows workspace/tab/agent info but not the current-work summary.
+[ui.sidebar.agents.rows_by_agent]
+claude = [["state_icon", "workspace", "tab"], ["$summary"], ["agent"]]
+pi = [["state_icon", "workspace", "tab"], ["$summary"], ["agent"]]
+
 # Pane graphics overlays, used by the pane-context plugin to draw the current
 # work summary in the pane's top-right corner (herdr/plugins/pane_context).
 [experimental]
