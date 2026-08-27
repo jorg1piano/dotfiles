@@ -1,8 +1,26 @@
 default:
     @just --list
 
-# Link every managed config into place.
-setup: herdr-link git-link
+# Install the tools and link every managed config into place.
+setup: brew-install herdr-link git-link
+
+# Install the Homebrew formulae the configs depend on.
+brew-install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if ! command -v brew >/dev/null; then
+        echo "brew is not on PATH — install Homebrew first: https://brew.sh" >&2
+        exit 1
+    fi
+
+    for formula in ripgrep; do
+        if brew list --formula "$formula" >/dev/null 2>&1; then
+            echo "already installed: $formula"
+        else
+            brew install "$formula"
+        fi
+    done
 
 # Link the herdr config and its helper scripts, then reload the running server.
 herdr-link:
