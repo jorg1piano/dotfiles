@@ -22,6 +22,14 @@ brew-install:
         fi
     done
 
+    for cask in fluidvoice; do
+        if brew list --cask "$cask" >/dev/null 2>&1; then
+            echo "already installed: $cask"
+        else
+            brew install --cask "$cask"
+        fi
+    done
+
 # Link the herdr config and its helper scripts, then reload the running server.
 herdr-link:
     #!/usr/bin/env bash
