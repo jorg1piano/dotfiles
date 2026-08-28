@@ -135,6 +135,16 @@ command = "$HOME/dotfiles/herdr/scripts/wet-worktree-space.sh"
 width = "70%"
 height = "40%"
 
+# prefix+alt+shift+d (down): the inverse of prefix+u. Runs `just stack nuke` in
+# the worktree, pops it with `wet worktree pop`, and closes its Herdr space.
+[[keys.command]]
+key = "prefix+alt+shift+d"
+type = "popup"
+description = "Nuke the wet worktree's stack, pop it, and close its space."
+command = "$HOME/dotfiles/herdr/scripts/wet-worktree-drop.sh"
+width = "70%"
+height = "40%"
+
 # Pick a command run in the active pane and yank it with all of its output.
 [[keys.command]]
 key = "prefix+shift+["
