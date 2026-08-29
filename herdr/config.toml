@@ -190,6 +190,27 @@ command = "$HOME/dotfiles/scripts/herdr-pick"
 width = "70%"
 height = "60%"
 
+# prefix+shift+o opens things mentioned in the current window/tab: URLs,
+# localhost ports, filesystem paths, Android emulators, and iOS Simulators.
+[[keys.command]]
+key = "prefix+shift+o"
+type = "popup"
+description = "Pick something mentioned in the current window/tab and open it."
+command = "$HOME/dotfiles/herdr/scripts/herdr-open-mentioned.py"
+width = "85%"
+height = "70%"
+
+# prefix+; goes where the focused pane says to go: it scans that pane's recent
+# output for space and pane ids that still exist, and focuses the newest one.
+# Two or more distinct destinations open a picker instead of guessing.
+[[keys.command]]
+key = "prefix+;"
+type = "popup"
+description = "Go to the space or pane the focused pane mentions."
+command = "$HOME/dotfiles/herdr/scripts/herdr-goto-mentioned.py"
+width = "80%"
+height = "50%"
+
 [theme]
 name = "catppuccin"
 auto_switch = false
