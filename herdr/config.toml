@@ -192,8 +192,19 @@ height = "60%"
 
 # prefix+shift+o opens things mentioned in the current window/tab: URLs,
 # localhost ports, filesystem paths, Android emulators, and iOS Simulators.
+# Mentions from the last 100 lines appear first; it also reads project config
+# (.env.worktree/.wet-worktrees.json) so Phoenix, Storybook, Tidewave, and
+# Android emulator targets stay easy to reach.
 [[keys.command]]
 key = "prefix+shift+o"
+type = "popup"
+description = "Pick something mentioned in the current window/tab and open it."
+command = "$HOME/dotfiles/herdr/scripts/herdr-open-mentioned.py"
+width = "85%"
+height = "70%"
+
+[[keys.command]]
+key = "cmd+shift+o"
 type = "popup"
 description = "Pick something mentioned in the current window/tab and open it."
 command = "$HOME/dotfiles/herdr/scripts/herdr-open-mentioned.py"

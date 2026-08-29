@@ -13,8 +13,10 @@ import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 LINES = os.environ.get("HERDR_OPEN_LINES", "600")
+RECENT_LINES = os.environ.get("HERDR_OPEN_RECENT_LINES", "100")
 LOG = os.environ.get("HERDR_OPEN_LOG", os.path.expanduser("~/.cache/herdr-open-mentioned.log"))
 home = os.path.expanduser("~")
 os.environ["PATH"] = os.environ.get("PATH", "") + f":/opt/homebrew/bin:/usr/local/bin:{home}/Library/Android/sdk/emulator:{home}/Library/Android/sdk/platform-tools:/Applications/Xcode.app/Contents/Developer/usr/bin"
@@ -113,11 +115,11 @@ def panes_to_scan(snap, source):
     return selected or [source]
 
 
-def read_panes(panes):
+def read_panes(panes, lines=LINES):
     chunks = []
     for pane in panes:
         title = pane.get("terminal_title_stripped") or pane.get("pane_id")
-        text = herdr("pane", "read", pane["pane_id"], "--source", "recent-unwrapped", "--lines", LINES, "--format", "text")
+        text = herdr("pane", "read", pane["pane_id"], "--source", "recent-unwrapped", "--lines", str(lines), "--format", "text")
         chunks.append(f"\n--- {pane['pane_id']} {title} ---\n{text}")
     return "\n".join(chunks)
 
@@ -142,9 +144,81 @@ def open_path_command(path: str) -> str:
     return f"if [ -d {quoted} ]; then open {quoted}; else open -R {quoted}; fi"
 
 
+def open_file_command(path: str) -> str:
+    return "open " + shell_quote(path)
+
+
 def open_emulator_command(identifier: str) -> str:
     script = os.path.expanduser("~/dotfiles/herdr/scripts/herdr-open-android-emulator.sh")
     return f"{shell_quote(script)} {shell_quote(identifier)}"
+
+
+def parse_dotenv(path: str) -> dict[str, str]:
+    values = {}
+    try:
+        for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return values
+
+
+def git_main_checkout(cwd: str) -> str:
+    result = run(["git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"])
+    if result and result.returncode == 0:
+        return str(Path(result.stdout.strip()).parent)
+    return ""
+
+
+def config_paths(source: dict) -> list[str]:
+    roots = []
+    cwd = source.get("foreground_cwd") or source.get("cwd") or os.getcwd()
+    for root in (cwd, git_main_checkout(cwd), os.path.expanduser("~/github/devda/sendi"), os.path.expanduser("~/github/devda/wet")):
+        if root and root not in roots and os.path.exists(root):
+            roots.append(root)
+    return roots
+
+
+def add_project_config_candidates(candidates, seen, source):
+    """Put known project endpoints from config files at the top of the picker."""
+    for root in config_paths(source):
+        env = parse_dotenv(os.path.join(root, ".env.worktree"))
+        label_prefix = os.path.basename(root.rstrip(os.sep))
+        phx = env.get("PHX_PORT")
+        tidewave = env.get("TIDEWAVE_PORT")
+        device = env.get("FLUTTER_DEVICE_ID")
+
+        if phx:
+            add(candidates, seen, "config", f"Phoenix — {label_prefix} — localhost:{phx}", ".env.worktree", open_url_command(f"http://localhost:{phx}"))
+        if tidewave:
+            add(candidates, seen, "config", f"Tidewave — {label_prefix} — localhost:{tidewave}", ".env.worktree", open_url_command(f"http://localhost:{tidewave}"))
+        # Storybook is convention-based for now; if a project exposes it, keep
+        # it near the top next to Phoenix instead of buried in pane output.
+        if os.path.exists(os.path.join(root, "mobile_elixir")) or os.path.exists(os.path.join(root, "web_elixir")):
+            add(candidates, seen, "config", f"Storybook — {label_prefix} — localhost:6006", "project default", open_url_command("http://localhost:6006"))
+        if device:
+            add(candidates, seen, "config", f"Android emulator — {label_prefix} — {device}", ".env.worktree", open_emulator_command(device))
+
+        worktrees = os.path.join(root, ".wet-worktrees.json")
+        try:
+            data = json.loads(Path(worktrees).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        for item in data.get("worktrees", []):
+            branch = item.get("branch") or os.path.basename(item.get("path", "worktree"))
+            ports = item.get("ports") or {}
+            pools = item.get("pools") or {}
+            if ports.get("PHX_PORT"):
+                add(candidates, seen, "config", f"Phoenix — {branch} — localhost:{ports['PHX_PORT']}", ".wet-worktrees.json", open_url_command(f"http://localhost:{ports['PHX_PORT']}"))
+            if ports.get("TIDEWAVE_PORT"):
+                add(candidates, seen, "config", f"Tidewave — {branch} — localhost:{ports['TIDEWAVE_PORT']}", ".wet-worktrees.json", open_url_command(f"http://localhost:{ports['TIDEWAVE_PORT']}"))
+            device = str(pools.get("devices", "")).removeprefix("emulator:")
+            if device:
+                add(candidates, seen, "config", f"Android emulator — {branch} — {device}", ".wet-worktrees.json", open_emulator_command(device))
 
 
 def android_avds():
@@ -166,8 +240,18 @@ def avd_for_serial(serial: str) -> str:
     return ""
 
 
-def collect(text: str):
+def collect(text: str, source=None, priority_text=None):
     candidates, seen = [], set()
+
+    # Put things mentioned in the last N lines first. Then config-derived
+    # defaults. Then older mentions from the larger scrollback window.
+    if priority_text:
+        for candidate in collect(priority_text):
+            add(candidates, seen, "recent", candidate.label, candidate.detail, candidate.command)
+
+    if source:
+        add_project_config_candidates(candidates, seen, source)
+
     lower = text.lower()
 
     for match in URL_RE.finditer(text):
@@ -193,9 +277,21 @@ def collect(text: str):
             continue
         expanded = os.path.expanduser(path)
         if os.path.exists(expanded):
-            label = path if len(path) <= 90 else "…" + path[-89:]
-            detail = "folder in Finder" if os.path.isdir(expanded) else "file in Finder"
-            add(candidates, seen, "path", label, detail, open_path_command(expanded))
+            name = os.path.basename(expanded.rstrip(os.sep)) or expanded
+            parent = os.path.basename(os.path.dirname(expanded.rstrip(os.sep)))
+            if os.path.isfile(expanded) and name.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")):
+                label = expanded
+                detail = "image file"
+                command = open_file_command(expanded)
+            elif os.path.isfile(expanded):
+                label = expanded
+                detail = "file in Finder"
+                command = open_path_command(expanded)
+            else:
+                label = expanded
+                detail = "folder in Finder"
+                command = open_path_command(expanded)
+            add(candidates, seen, "path", label, detail, command)
 
     if "storybook" in lower and "localhost:6006" not in lower:
         add(candidates, seen, "default", "Storybook — localhost:6006", "inferred from “storybook”", open_url_command("http://localhost:6006"))
@@ -234,13 +330,73 @@ def collect(text: str):
             add(candidates, seen, "avd", avd, "Android Virtual Device", open_emulator_command(avd))
 
     for udid in IOS_UDID_RE.findall(text):
+        # Screenshot/task paths often contain UUID directory names; don't offer
+        # those as iOS simulators unless the surrounding text says simulator.
+        if re.search(r"/[^\s]*" + re.escape(udid) + r"[^\s]*/", text) and not re.search(r"(?:ios|simulator|simctl)[^\n]{0,80}" + re.escape(udid), text, re.I):
+            continue
         add(candidates, seen, "ios", udid, "iOS Simulator device", f"xcrun simctl boot {shell_quote(udid)} >/dev/null 2>&1 || true; open -a Simulator --args -CurrentDeviceUDID {shell_quote(udid)}")
 
     return candidates
 
 
+def display_category(candidate):
+    text = f"{candidate.label} {candidate.detail}".lower()
+    if "android" in text or "emulator" in text or "flutter target" in text or "attached android" in text:
+        return "mobile"
+    if "storybook" in text:
+        return "storybook"
+    if "phoenix" in text:
+        return "phoenix"
+    if "tidewave" in text:
+        return "tidewave"
+    if "image" in text:
+        return "images"
+    if "finder" in text or "folder" in text or "file" in text:
+        return "paths"
+    if "localhost" in text or "local url" in text or "local dev server" in text:
+        return "web"
+    return "other"
+
+
+def display_label(candidate):
+    label = candidate.label
+    detail = candidate.detail
+    if detail in ("image file", "file in Finder"):
+        parent = os.path.basename(os.path.dirname(label.rstrip(os.sep)))
+        return f"{os.path.basename(label)}  ({parent})"
+    if detail == "folder in Finder":
+        return label.rstrip(os.sep) + "/"
+    return label
+
+
+def ellipsize(value, width):
+    value = str(value)
+    if len(value) <= width:
+        return value
+    return value[: max(1, width - 1)] + "…"
+
+
+def display_rows(candidates):
+    rows = []
+    kind_width = 10
+    target_width = 84
+    source_width = 22
+    for c in candidates:
+        category = display_category(c)
+        target = ellipsize(display_label(c), target_width)
+        source = ellipsize(c.detail, source_width)
+        table_row = f"{category:<{kind_width}} │ {target:<{target_width}} │ {source:<{source_width}}"
+        # Field 1 is hidden but searchable, so typing category names like
+        # "mobile", "phoenix", "storybook", "tidewave", or "paths" matches
+        # every item in that group. Field 3 stays hidden and carries the full
+        # command/path, so long paths remain searchable without visual noise.
+        search_key = f"{category} {c.key} {c.detail} {c.command}"
+        rows.append(f"{search_key}\t{table_row}\t{c.command}")
+    return rows
+
+
 def pick(candidates):
-    rows = [f"{c.key}\t{c.label}\t{c.detail}\t{c.command}" for c in candidates]
+    rows = display_rows(candidates)
     try:
         result = subprocess.run(
             [
@@ -248,9 +404,10 @@ def pick(candidates):
                 "--height=100%",
                 "--reverse",
                 "--delimiter=\t",
-                "--with-nth=2,3",
+                "--with-nth=2",
+                "--nth=1,2,3",
                 "--prompt=open > ",
-                "--header=enter/click opens the selected item",
+                "--header=KIND       │ TARGET                                                                               │ SOURCE\nenter/click opens the selected item",
                 "--bind=left-click:accept,double-click:accept",
             ],
             input="\n".join(rows),
@@ -264,7 +421,7 @@ def pick(candidates):
     line = result.stdout.strip()
     if not line:
         sys.exit(0)
-    return line.split("\t", 3)[3]
+    return line.split("\t", 2)[2]
 
 
 def main():
@@ -272,8 +429,10 @@ def main():
         die("not running inside a Herdr pane")
     snap = snapshot()
     pane = source_pane(snap)
-    text = read_panes(panes_to_scan(snap, pane))
-    candidates = collect(text)
+    panes = panes_to_scan(snap, pane)
+    recent_text = read_panes(panes, RECENT_LINES)
+    text = read_panes(panes, LINES)
+    candidates = collect(text, pane, recent_text)
     if not candidates:
         die(f"no URLs, localhost ports, emulator ids, AVD/device names, or simulator UDIDs in the last {LINES} lines")
     if os.environ.get("HERDR_OPEN_DRY_RUN") == "1":
