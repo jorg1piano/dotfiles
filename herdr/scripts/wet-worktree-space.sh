@@ -1,7 +1,11 @@
 #!/bin/sh
 # Prompt for a slug and a coding agent, create a `wet` worktree named after the
-# slug, open that worktree as a child space of the current repo, start the agent
-# in its pane, and split a pane to the right running `just setup && just stack up`.
+# slug, open that worktree as a child space of the current repo, and lay out the
+# whole solution in it: the agent in the space's root pane on the left, and a
+# column on the right with slot setup/start + IEx on top and `just mobile run`
+# below. Long-running commands are sent to the panes and left there, so the
+# prefix+u popup returns immediately and another worktree can be dispatched
+# while this one is still bootstrapping.
 #
 # Bound from ~/.config/herdr/config.toml as the prefix+u popup.
 # Herdr provides HERDR_ACTIVE_PANE_CWD for the pane the chord was pressed in.
@@ -68,11 +72,34 @@ opened=$(herdr_json worktree open --cwd "$main" --path "$path" --label "$slug" -
 pane=$(printf '%s' "$opened" | jq -r '.result.root_pane.pane_id // empty')
 [ -n "$pane" ] || fail "herdr worktree open returned no root pane: $opened"
 
+# Three panes: the agent stays in the space's root pane on the left, and the
+# right half is a column — the stack and an IEx shell on top, the app below.
 split=$(herdr_json pane split "$pane" --direction right --cwd "$path" --no-focus)
-right=$(printf '%s' "$split" | jq -r '.result.pane.pane_id // empty')
-[ -n "$right" ] || fail "herdr pane split returned no pane: $split"
+top=$(printf '%s' "$split" | jq -r '.result.pane.pane_id // empty')
+[ -n "$top" ] || fail "herdr pane split returned no pane: $split"
 
-# One command line, so `just stack up` only runs if `just setup` succeeded.
-herdr_json pane run "$right" 'just setup && just stack up' >/dev/null
+split=$(herdr_json pane split "$top" --direction down --cwd "$path" --no-focus)
+bottom=$(printf '%s' "$split" | jq -r '.result.pane.pane_id // empty')
+[ -n "$bottom" ] || fail "herdr pane split returned no pane: $split"
 
-herdr_json pane run "$pane" "$agent" >/dev/null
+# Fire-and-forget a command into an interactive shell. `herdr pane run` owns the
+# pane until the command finishes; using it for setup made prefix+u stay busy for
+# minutes and prevented dispatching a second worktree while the first booted.
+start_pane() {
+  target=$1
+  shift
+  herdr_json pane send-text "$target" "$*" >/dev/null
+  herdr_json pane send-keys "$target" enter >/dev/null
+}
+
+# One command line, so each step only runs if the one before it succeeded:
+# setup claims a slot/pool item, reset prepares the reusable resources, start
+# boots this checkout's stack, and IEx attaches only after healthchecks pass.
+start_pane "$top" 'wet setup --headless && wet slot reset --headless && wet slot start --headless && just backend iex'
+
+# The app pane can be queued immediately, but it must not race setup. Wait for
+# wet's generated files and for Phoenix to answer on this slot's port before
+# handing the terminal to flutter run.
+start_pane "$bottom" 'while [ ! -f .env.worktree ] || [ ! -f mobile_elixir/.env ]; do sleep 1; done; . ./.env.worktree; until curl -fsS "http://127.0.0.1:${PHX_PORT}/" >/dev/null; do sleep 2; done; just mobile run'
+
+start_pane "$pane" "nvm use 24 && $agent"

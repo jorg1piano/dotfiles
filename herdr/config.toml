@@ -125,12 +125,13 @@ description = "Open the active pane's directory in VS Code."
 command = "code \"${HERDR_ACTIVE_PANE_CWD:-$PWD}\""
 
 # prefix+u (up): prompt for a slug, create a `wet` worktree for it, open it as a
-# child space of the current repo, and run `just setup && just stack up` in a pane
-# to the right.
+# child space of the current repo, and lay the whole solution out in three panes
+# — the agent on the left, `just setup && just stack up && just backend iex` in
+# the top right, `just mobile run` under it.
 [[keys.command]]
 key = "prefix+u"
 type = "popup"
-description = "Create and open a wet worktree for a prompted slug."
+description = "Create a wet worktree and open it with agent, stack, IEx and the app."
 command = "$HOME/dotfiles/herdr/scripts/wet-worktree-space.sh"
 width = "70%"
 height = "40%"
