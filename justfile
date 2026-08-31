@@ -2,7 +2,7 @@ default:
     @just --list
 
 # Install the tools and link every managed config into place.
-setup: brew-install herdr-link git-link nvim-link
+setup: brew-install herdr-link git-link nvim-link ghostty-link
 
 # Install the Homebrew formulae the configs depend on.
 brew-install:
@@ -127,6 +127,28 @@ nvim-link:
             echo '  { import = "dotfiles.plugins" },' >&2
             exit 1
         fi
+    fi
+
+# Link the Ghostty configuration.
+ghostty-link:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    repo="{{justfile_directory()}}"
+    config="$HOME/.config/ghostty"
+    mkdir -p "$config"
+    dst="$config/config"
+    src="$repo/ghostty/config"
+
+    if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
+        echo "already linked: $dst"
+    else
+        if [ -e "$dst" ] && [ ! -L "$dst" ]; then
+            mv "$dst" "$dst.bak.$(date +%Y%m%d%H%M%S)"
+            echo "backed up existing $dst"
+        fi
+        ln -sfn "$src" "$dst"
+        echo "linked $dst -> $src"
     fi
 
 # Point git's global excludes at the repo's gitignore_global.

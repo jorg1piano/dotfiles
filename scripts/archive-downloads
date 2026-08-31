@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Move everything directly under ~/Downloads into ~/Downloads/archived,
+# except the archived directory itself. Safe for cron: handles spaces, dotfiles,
+# and name collisions by appending a timestamp suffix.
+
+set -euo pipefail
+
+downloads="$HOME/Downloads"
+archive="$downloads/archived"
+
+mkdir -p "$archive"
+
+find "$downloads" -mindepth 1 -maxdepth 1 ! -name archived -print0 |
+while IFS= read -r -d '' item; do
+  base=$(basename "$item")
+  dest="$archive/$base"
+
+  if [ -e "$dest" ]; then
+    stamp=$(date +%Y%m%d%H%M%S)
+    dest="$archive/${base}.${stamp}"
+
+    # If multiple colliding items are processed within the same second, keep
+    # incrementing until the destination is free.
+    i=1
+    while [ -e "$dest" ]; do
+      dest="$archive/${base}.${stamp}.${i}"
+      i=$((i + 1))
+    done
+  fi
+
+  mv "$item" "$dest"
+done
