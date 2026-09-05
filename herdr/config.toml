@@ -17,6 +17,17 @@ last_pane = "prefix+alt+l"
 # copies .gitignored files, so the builtin was redundant.
 new_worktree = ""
 
+# Let the close helper pop wet worktrees before closing their workspace.
+close_workspace = ""
+
+[[keys.command]]
+key = "prefix+shift+d"
+type = "popup"
+description = "Close the workspace, first popping wet worktrees with a root .wet.yaml."
+command = "$HOME/dotfiles/herdr/scripts/herdr-close-workspace.sh"
+width = "70%"
+height = "40%"
+
 # Create a worktree with `sdf worktree create`, then open it in Herdr.
 [[keys.command]]
 key = "prefix+alt+g"
