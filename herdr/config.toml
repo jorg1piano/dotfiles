@@ -260,8 +260,9 @@ auto_switch = false
 # writes this as `$summary`; without this row override Herdr's default agents
 # list shows workspace/tab/agent info but not the current-work summary.
 [ui.sidebar.agents.rows_by_agent]
-claude = [["state_icon", "workspace", "tab"], ["$summary"], ["agent"]]
-pi = [["state_icon", "workspace", "tab"], ["$summary"], ["agent"]]
+claude = [["state_icon", "workspace", "tab"], ["$summary"], ["$proof"], ["agent"]]
+codex = [["state_icon", "workspace", "tab"], ["$summary"], ["$proof"], ["agent"]]
+pi = [["state_icon", "workspace", "tab"], ["$summary"], ["$proof"], ["agent"]]
 
 # Pane graphics overlays, used by the pane-context plugin to draw the current
 # work summary in the pane's top-right corner (herdr/plugins/pane_context).

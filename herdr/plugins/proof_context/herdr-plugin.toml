@@ -1,0 +1,46 @@
+id = "jorgen.proofcontext"
+name = "proofcontext"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+description = "Read j1pstack .nudge proof contracts and show the current proof status as pane metadata."
+platforms = ["macos", "linux"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/proof_context.py\" hook"]
+
+[[panes]]
+id = "cards"
+title = "proof cards"
+placement = "overlay"
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/proof_context.py\" cards"]
+
+[[actions]]
+id = "cards"
+title = "proofcontext: show clickable proof cards"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/proof_context.py\" open-cards"]
+
+[[actions]]
+id = "refresh"
+title = "proofcontext: refresh proof status for this pane"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/proof_context.py\" refresh"]
+
+[[actions]]
+id = "clear"
+title = "proofcontext: clear this pane's proof status"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/proof_context.py\" clear"]
+
+[[actions]]
+id = "open-link"
+title = "proofcontext: open proof link"
+contexts = ["global"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/proof_context.py\" open-link"]
+
+[[link_handlers]]
+id = "proof"
+title = "Open nudge proof artifact"
+pattern = "nudge-proof://.*"
+action = "open-link"

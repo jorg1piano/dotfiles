@@ -2,7 +2,7 @@ default:
     @just --list
 
 # Install the tools and link every managed config into place.
-setup: brew-install herdr-link git-link nvim-link ghostty-link
+setup: brew-install herdr-link git-link nvim-link ghostty-link tools-install
 
 # Install the Homebrew formulae the configs depend on.
 brew-install:
@@ -167,3 +167,155 @@ git-link:
         git config --global core.excludesfile "$want"
         echo "set core.excludesfile -> $want"
     fi
+
+# Where the Go tools in this repo get installed, and how the poller is scheduled.
+bindir := env("BINDIR", env("HOME") / ".local/bin")
+panewatch_flags := env("PANEWATCH_FLAGS", "-quiet -notify")
+panewatch_schedule := env("PANEWATCH_SCHEDULE", "* * * * *")
+panewatch_label := "com.jorgen.panewatch"
+
+# Build and install the Go tools in this repo: panewatch and saythis.
+tools-install: panewatch-install saythis-install
+
+# Build panewatch and put it on your PATH.
+panewatch-install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    command -v go >/dev/null || { echo "go is not on PATH — brew install go" >&2; exit 1; }
+
+    repo="{{justfile_directory()}}"
+    mkdir -p "{{bindir}}"
+    cd "$repo/panewatch"
+    go build -o "$repo/panewatch/panewatch" .
+    install -m 0755 "$repo/panewatch/panewatch" "{{bindir}}/panewatch"
+    rm -f "$repo/panewatch/panewatch"
+    echo "installed {{bindir}}/panewatch"
+
+    case ":$PATH:" in
+        *":{{bindir}}:"*) ;;
+        *) echo "{{bindir}} is not on your PATH. Add to ~/.zshrc:"; \
+           echo "  export PATH=\"{{bindir}}:\$PATH\"" ;;
+    esac
+
+# Build saythis and put it on your PATH. The API key stays in ~/.config/saythis.
+saythis-install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    command -v go >/dev/null || { echo "go is not on PATH — brew install go" >&2; exit 1; }
+
+    repo="{{justfile_directory()}}"
+    mkdir -p "{{bindir}}"
+    cd "$repo/saythis"
+    go build -o "$repo/saythis/saythis" .
+    install -m 0755 "$repo/saythis/saythis" "{{bindir}}/saythis"
+    rm -f "$repo/saythis/saythis"
+    echo "installed {{bindir}}/saythis"
+
+    # The key never lives in this repo. saythis reads T2S or OPENAI_API_KEY from
+    # the environment first, then ~/.config/saythis/.env.
+    conf="$HOME/.config/saythis/.env"
+    if [ -f "$conf" ]; then
+        chmod 600 "$conf"
+        echo "using the key already in $conf"
+    elif [ -n "${T2S:-}${OPENAI_API_KEY:-}" ]; then
+        echo "using the key from your environment"
+    else
+        echo "no API key yet. Write one to $conf:" >&2
+        echo "  mkdir -p \"\$(dirname \"$conf\")\" && echo 'T2S=sk-...' > \"$conf\" && chmod 600 \"$conf\"" >&2
+    fi
+
+# Poll for quiet agents every minute from crontab. Prefer panewatch-launchd on macOS.
+panewatch-cron: panewatch-install
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    bin="{{bindir}}/panewatch"
+    line="{{panewatch_schedule}} $bin {{panewatch_flags}} # {{panewatch_label}}"
+
+    # crontab -l exits 1 when there is no crontab yet, which is not an error here.
+    current=$(crontab -l 2>/dev/null || true)
+    kept=$(printf '%s\n' "$current" | grep -v "{{panewatch_label}}" || true)
+    printf '%s\n%s\n' "$kept" "$line" | grep -v '^$' | crontab -
+    echo "scheduled: $line"
+    echo
+    echo "macOS: give /usr/sbin/cron Full Disk Access, or cron cannot read your"
+    echo "state file. System Settings > Privacy & Security > Full Disk Access."
+
+# Remove the crontab entry.
+panewatch-uncron:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    current=$(crontab -l 2>/dev/null || true)
+    if ! printf '%s\n' "$current" | grep -q "{{panewatch_label}}"; then
+        echo "no panewatch entry in crontab"
+        exit 0
+    fi
+    printf '%s\n' "$current" | grep -v "{{panewatch_label}}" | grep -v '^$' | crontab - || crontab -r
+    echo "removed the panewatch crontab entry"
+
+# Poll for quiet agents every minute from launchd. This is the one that works on macOS.
+panewatch-launchd: panewatch-install
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    bin="{{bindir}}/panewatch"
+    plist="$HOME/Library/LaunchAgents/{{panewatch_label}}.plist"
+    logdir="$HOME/.local/state/panewatch"
+    mkdir -p "$(dirname "$plist")" "$logdir"
+
+    # Each flag is its own ProgramArguments entry, so build the array from the
+    # flag string rather than interpolating it as one string.
+    args=""
+    for flag in {{panewatch_flags}}; do
+        args="$args        <string>$flag</string>"$'\n'
+    done
+
+    cat > "$plist" <<PLIST
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <key>Label</key>
+        <string>{{panewatch_label}}</string>
+        <key>ProgramArguments</key>
+        <array>
+            <string>$bin</string>
+    $args    </array>
+        <key>StartInterval</key>
+        <integer>60</integer>
+        <key>RunAtLoad</key>
+        <false/>
+        <key>StandardOutPath</key>
+        <string>$logdir/panewatch.log</string>
+        <key>StandardErrorPath</key>
+        <string>$logdir/panewatch.err</string>
+        <key>EnvironmentVariables</key>
+        <dict>
+            <key>PATH</key>
+            <string>{{bindir}}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        </dict>
+    </dict>
+    </plist>
+    PLIST
+
+    # The heredoc above is indented to match the recipe, so strip it back out.
+    sed -i '' 's/^    //' "$plist"
+    plutil -lint "$plist" >/dev/null
+
+    launchctl bootout "gui/$(id -u)/{{panewatch_label}}" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "$plist"
+    echo "loaded {{panewatch_label}}, polling every 60s"
+    echo "logs: $logdir/panewatch.log and panewatch.err"
+
+# Unload and remove the launchd agent.
+panewatch-unlaunchd:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    plist="$HOME/Library/LaunchAgents/{{panewatch_label}}.plist"
+    launchctl bootout "gui/$(id -u)/{{panewatch_label}}" 2>/dev/null || true
+    rm -f "$plist"
+    echo "removed {{panewatch_label}}"
