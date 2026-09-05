@@ -117,6 +117,13 @@ type = "plugin_action"
 description = "Toggle the reviewr code-review sidebar."
 command = "persiyanov.reviewr.toggle"
 
+# Show clickable proof artifact cards for the focused pane/repo.
+[[keys.command]]
+key = "prefix+alt+p"
+type = "plugin_action"
+description = "Show clickable proof artifact cards."
+command = "jorgen.proofcontext.cards"
+
 # Open the active pane's directory in VS Code.
 [[keys.command]]
 key = "prefix+alt+c"
