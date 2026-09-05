@@ -230,6 +230,17 @@ command = "$HOME/dotfiles/herdr/scripts/herdr-goto-mentioned.py"
 width = "80%"
 height = "50%"
 
+# prefix+shift+i: type a space id (w93) or part of a label and go there.
+# The tree picker (prefix+shift+g is folders, Herdr's own is a tree) is for
+# browsing; this is for when I already know the id.
+[[keys.command]]
+key = "prefix+shift+i"
+type = "popup"
+description = "Type a space id or label and focus that space."
+command = "$HOME/dotfiles/herdr/scripts/herdr-goto-space.sh"
+width = "70%"
+height = "60%"
+
 [theme]
 name = "catppuccin"
 auto_switch = false
