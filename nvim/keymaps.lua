@@ -12,3 +12,9 @@ vim.keymap.set("n", "<leader>fa", function()
     end
   end)
 end, { desc = "Find files (any path)" })
+
+-- Collapse every comment in the buffer, leaving the code expanded. Toggling
+-- back restores whatever folds the window had before.
+vim.keymap.set("n", "<leader>zc", function()
+  require("dotfiles.comment_folds").toggle()
+end, { desc = "Toggle comment folds" })
