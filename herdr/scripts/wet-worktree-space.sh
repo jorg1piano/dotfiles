@@ -59,8 +59,8 @@ done
 
 echo
 echo "wet worktree create $slug"
-# --no-tmux: Herdr manages the layout, a stray tmux window would fight it.
-created=$(wet worktree create "$slug" --no-tmux --json) ||
+# --no-multiplexer: Herdr manages the layout, a stray tmux window would fight it.
+created=$(wet worktree create "$slug" --no-multiplexer --json) ||
   fail "wet worktree create $slug failed"
 
 path=$(printf '%s' "$created" | jq -r '.path // empty')
@@ -98,8 +98,11 @@ start_pane() {
 start_pane "$top" 'wet setup --headless && wet slot reset --headless && wet slot start --headless && just backend iex'
 
 # The app pane can be queued immediately, but it must not race setup. Wait for
-# wet's generated files and for Phoenix to answer on this slot's port before
-# handing the terminal to flutter run.
-start_pane "$bottom" 'while [ ! -f .env.worktree ] || [ ! -f mobile_elixir/.env ]; do sleep 1; done; . ./.env.worktree; until curl -fsS "http://127.0.0.1:${PHX_PORT}/" >/dev/null; do sleep 2; done; just mobile run'
+# .env.worktree (the slot's ports) and then for Phoenix to answer on this
+# slot's port before handing the terminal to flutter run. Any HTTP status
+# counts: `/` is a 404 on a host-routed landing page, and a 404 still means
+# Phoenix is up, `wet setup` finished long ago and every generated env file
+# the app needs is in place.
+start_pane "$bottom" 'while [ ! -f .env.worktree ]; do sleep 1; done; . ./.env.worktree; until curl -sS -o /dev/null "http://127.0.0.1:${PHX_PORT}/" 2>/dev/null; do sleep 2; done; just mobile run'
 
 start_pane "$pane" "nvm use 24 && $agent"
