@@ -276,17 +276,18 @@ hs.hotkey.bind(hyper, "0", function()
     hs.alert.show(string.format("Cleared %d capture%s", count, count == 1 and "" or "s"))
 end)
 
--- hyper+§: open the Sectioned overlay to pick a region to screenshot or record.
--- The URL launches Sectioned first if it isn't running; pressing again closes the
--- overlay or stops a recording. § is the ISO section key, bound by keycode (10).
-hs.hotkey.bind(hyper, 10, function()
+-- hyper+c: open the Sectioned overlay to pick a region to screenshot or record; c again
+-- inside the overlay repeats the last action on the last region. The URL launches Sectioned
+-- first if it isn't running; pressing again closes the overlay or stops a recording.
+hs.hotkey.bind(hyper, "c", function()
     hs.urlevent.openURL("sectioned://capture")
 end)
 
--- hyper+c: arrange Chrome windows in a 3-column split on the leftmost screen.
+-- hyper+§: arrange Chrome windows in a 3-column split on the leftmost screen.
 -- Repeated presses rotate which windows occupy the slots (deterministic).
+-- § is the ISO section key, bound by keycode (10).
 local chromeRotation = 0
-hs.hotkey.bind(hyper, "c", function()
+hs.hotkey.bind(hyper, 10, function()
     local chrome = hs.application.get("Google Chrome")
     if not chrome then
         hs.alert.show("Chrome not running")
