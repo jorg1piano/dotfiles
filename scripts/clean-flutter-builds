@@ -13,6 +13,7 @@ folders inside each one with their size:
   build/  .dart_tool/  android/.gradle/  ios/Pods/  ios/.symlinks/
   macos/Pods/  macos/.symlinks/
 
+Folders holding files tracked by git are skipped.
 Nothing is removed unless --delete is given. Every folder comes back with
 `flutter pub get` and the next build (or `pod install` for Pods).
 
@@ -58,6 +59,10 @@ while IFS= read -r project; do
     for target in "${targets[@]}"; do
         path=$project/$target
         [[ -d $path && ! -L $path ]] || continue
+        if [[ -n $(git -C "$project" ls-files -- "$target" 2>/dev/null | head -1) ]]; then
+            printf '%8s  %s (has files tracked by git)\n' skipped "$path"
+            continue
+        fi
         kb=$(du -sk "$path" 2>/dev/null | cut -f1)
         total_kb=$((total_kb + kb))
         printf '%8s  %s\n' "$(awk -v k="$kb" 'BEGIN { printf "%.1fM", k / 1024 }')" "$path"
