@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Delete regenerable build output from Flutter projects under a folder.
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: clean-flutter-builds [--delete] [SEARCH_FOLDER]
+
+Search the folder (default: current directory) for Flutter projects, meaning
+any pubspec.yaml that depends on `sdk: flutter`, and list the cached build
+folders inside each one with their size:
+
+  build/  .dart_tool/  android/.gradle/  ios/Pods/  ios/.symlinks/
+  macos/Pods/  macos/.symlinks/
+
+Nothing is removed unless --delete is given. Every folder comes back with
+`flutter pub get` and the next build (or `pod install` for Pods).
+
+Examples:
+  clean-flutter-builds ~/code
+  clean-flutter-builds --delete ~/code
+EOF
+}
+
+delete=false
+root=.
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help) usage; exit 0 ;;
+        --delete) delete=true ;;
+        -*) usage >&2; exit 2 ;;
+        *) root=$arg ;;
+    esac
+done
+[[ -d $root ]] || { echo "Not a folder: $root" >&2; exit 2; }
+
+targets=(build .dart_tool android/.gradle ios/Pods ios/.symlinks macos/Pods macos/.symlinks)
+
+# Prune folders that hold generated or third-party pubspecs. ios/.symlinks
+# points into ~/.pub-cache, so walking it would clean shared packages.
+projects=$(find "$root" \
+    \( -name .git -o -name node_modules -o -name build -o -name .dart_tool \
+       -o -name .symlinks -o -name ephemeral -o -name Pods -o -name .pub-cache \) -prune \
+    -o -name pubspec.yaml -type f -print 2>/dev/null |
+    while IFS= read -r pubspec; do
+        if grep -Eq '^[[:space:]]+sdk:[[:space:]]*flutter[[:space:]]*$' "$pubspec"; then
+            dirname "$pubspec"
+        fi
+    done | sort)
+
+if [[ -z $projects ]]; then
+    echo "No Flutter projects found under $root"
+    exit 0
+fi
+
+total_kb=0
+while IFS= read -r project; do
+    for target in "${targets[@]}"; do
+        path=$project/$target
+        [[ -d $path && ! -L $path ]] || continue
+        kb=$(du -sk "$path" 2>/dev/null | cut -f1)
+        total_kb=$((total_kb + kb))
+        printf '%8s  %s\n' "$(awk -v k="$kb" 'BEGIN { printf "%.1fM", k / 1024 }')" "$path"
+        if $delete; then
+            rm -rf "$path"
+        fi
+    done
+done <<< "$projects"
+
+total=$(awk -v k="$total_kb" 'BEGIN { printf "%.1f GiB", k / 1048576 }')
+if $delete; then
+    echo "Deleted $total"
+else
+    echo "Would delete $total. Run again with --delete to remove it."
+fi
