@@ -23,7 +23,7 @@ end)
 shortcuts = {
     { "j", "Visual Studio Code" },
     { "k", "Ghostty" },
-    { "x", "XCode" },
+    { "x", "Codex" },
     { "f", "Finder" },
     { "l", "Slack" },
     { "h", "Hammerspoon" },
@@ -194,7 +194,7 @@ hs.loadSpoon("AppWindowSwitcher")
         ["Google Chrome"] = { hyper, ";" },
         ["Code"] = { hyper, "j" },
         ["Ghostty"] = { hyper, "k" },
-        ["XCode"] = { hyper, "x" },
+        ["Codex"] = { hyper, "x" },
         ["Finder"] = { hyper, "f" },
         ["Slack"] = { hyper, "l" },
         ["Hammerspoon"] = { hyper, "h" },
