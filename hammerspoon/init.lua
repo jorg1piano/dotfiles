@@ -32,7 +32,6 @@ shortcuts = {
     { "g", "ChatGPT" },
     { "m", "com.apple.mail" },
     { "e", "qemu-system-aarch64" },
-    { "p", "1Password" },
     { "s", "Simulator" },
 }
 
@@ -201,7 +200,6 @@ hs.loadSpoon("AppWindowSwitcher")
         ["ChatGPT"] = { hyper, "g" },
         ["Mail"] = { hyper, "m" },
         ["qemu-system-aarch64"] = { hyper, "e" },
-        ["1Password"] = { hyper, "p" },
         ["Simulator"] = { hyper, "s" },
     })
 
@@ -412,6 +410,43 @@ hs.hotkey.bind(hyper, "o", function()
     end
 
     hs.alert.show(string.format("Tiled %d %s windows in %dx%d", #windows, app:name(), cols, rows))
+end)
+
+-- hyper+p: PromptBox, a floating editor for writing prompts to terminal agents.
+-- Remembers the window that was focused, opens PromptBox on that window's screen, and gives
+-- focus back when PromptBox hides. ⌘↩ in PromptBox puts the prompt on the clipboard and
+-- sends promptbox-paste, which pastes it into that window. Press hyper+p again to hide.
+local promptBoxBundleID = "no.devda.PromptBox"
+local promptBoxTarget = nil
+
+hs.hotkey.bind(hyper, "p", function()
+    local front = hs.application.frontmostApplication()
+    if front and front:bundleID() == promptBoxBundleID then
+        hs.urlevent.openURL("promptbox://hide")
+        return
+    end
+    promptBoxTarget = hs.window.focusedWindow()
+    local url = "promptbox://show"
+    if promptBoxTarget then
+        local f = promptBoxTarget:frame()
+        url = string.format("%s?x=%d&y=%d", url, f.x + f.w / 2, f.y + f.h / 2)
+    end
+    hs.urlevent.openURL(url)
+end)
+
+local function refocusPromptBoxTarget()
+    if not promptBoxTarget then return false end
+    return pcall(function() promptBoxTarget:focus() end)
+end
+
+hs.urlevent.bind("promptbox-closed", function()
+    refocusPromptBoxTarget()
+end)
+
+hs.urlevent.bind("promptbox-paste", function()
+    if refocusPromptBoxTarget() then
+        hs.timer.doAfter(0.15, function() hs.eventtap.keyStroke({ "cmd" }, "v", 0) end)
+    end
 end)
 
 hs.alert.show("Config loaded")
