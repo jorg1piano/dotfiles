@@ -59,7 +59,25 @@ source_cwd=$(
 
 text=$(herdr pane read "$source_pane" --source recent-unwrapped --lines "$LINES" --format text)
 
-candidates=$(printf '%s' "$text" | perl -0777 -ne '
+candidates=$(printf '%s' "$text" | perl -CS -0777 -ne '
+    # TUIs like Claude Code hard-wrap a long path onto indented next lines,
+    # which recent-unwrapped cannot undo. The wrap column differs per resize
+    # and per block, so guess loosely: a line ending in a long or slashed
+    # token, followed by an indented line that is no longer and starts with a
+    # token char, continues on that line. Each run of such lines is a group.
+    my @phys = split /\n/;
+    my $cont = qr{^\s+[\w.@+/%=&?#~-]};
+    my @groups;
+    for my $i (0 .. $#phys) {
+        my $p = $i ? $phys[$i - 1] : undef;
+        if (defined $p && $p =~ /(\S+)$/ && ($1 =~ m{/} || length $1 >= 16)
+            && $phys[$i] =~ $cont && length $phys[$i] <= length $p) {
+            push @{ $groups[-1] }, $phys[$i];
+        } else {
+            push @groups, [$phys[$i]];
+        }
+    }
+
     my @pats = (
         ["url",    qr{(?:https?|ftp)://[^\s"'"'"'`<>()\[\]{}|\\]+}],
         ["branch", qr{\((?<m>[A-Za-z0-9._/+-]{1,60})\)\s*[\$#>%]}],
@@ -72,21 +90,42 @@ candidates=$(printf '%s' "$text" | perl -0777 -ne '
         ["path",   qr{(?<![\w@/.~-])(?:~|\.{1,2})?/?[\w.@+-]+(?:/[\w.@+-]+)+/?}],
         ["hex",    qr{#[0-9a-fA-F]{6}\b}],
     );
-    my (@out, %seen);
-    # Bottom-up: the most recent output is what you usually want.
-    for my $line (reverse split /\n/) {
-        my @claimed;
+    # Longest match wins an overlap, so a path keeps the uuid inside it.
+    sub scan {
+        my ($line) = @_;
+        my (@hits, @found, @claimed);
         for my $p (@pats) {
             my ($kind, $re) = @$p;
             while ($line =~ /$re/g) {
-                my ($s, $e) = ($-[0], $+[0]);
-                my $val = defined $+{m} ? $+{m} : $&;
-                next if grep { $s < $_->[1] && $e > $_->[0] } @claimed;
-                push @claimed, [$s, $e];
-                $val =~ s/[.,;:!?)\]}>"'"'"']+$//;
-                next if length($val) < 3 || $seen{$val}++;
-                push @out, "$kind\t$val";
+                push @hits, [$kind, defined $+{m} ? $+{m} : $&, $-[0], $+[0]];
             }
+        }
+        for my $h (sort { ($b->[3] - $b->[2]) <=> ($a->[3] - $a->[2]) } @hits) {
+            my ($kind, $val, $s, $e) = @$h;
+            next if grep { $s < $_->[1] && $e > $_->[0] } @claimed;
+            push @claimed, [$s, $e];
+            $val =~ s/[.,;:!?)\]}>"'"'"']+$//;
+            push @found, [$s, $kind, $val] if length($val) >= 3;
+        }
+        return map { [$_->[1], $_->[2]] } sort { $a->[0] <=> $b->[0] } @found;
+    }
+    my (@out, %seen);
+    # Bottom-up: the most recent output is what you usually want.
+    for my $g (reverse @groups) {
+        my @found = scan(join "", $g->[0], map { s/^\s+//r } @$g[1 .. $#$g]);
+        if (@$g > 1) {
+            # The glue is a guess, so the unglued pieces stay on offer, but
+            # not the ones that sit inside a glued token: those are cut-off
+            # tails, never what you want.
+            my @joined = map { $_->[1] } @found;
+            push @found, grep {
+                my $v = $_->[1];
+                !grep { index($_, $v) > 0 } @joined;
+            } map { scan($_) } @$g;
+        }
+        for (@found) {
+            my ($kind, $val) = @$_;
+            push @out, "$kind\t$val" unless $seen{$val}++;
         }
     }
     print "$_\n" for @out;
