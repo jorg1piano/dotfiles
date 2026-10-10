@@ -45,6 +45,7 @@ packages=(
   "cask hammerspoon /Applications/Hammerspoon.app"
   "cask 1password /Applications/1Password.app"
   "cask 1password-cli op"
+  "cask slack /Applications/Slack.app"
   "formula just just"
   "formula go go"
   "formula neovim nvim"
