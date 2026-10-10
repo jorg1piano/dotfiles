@@ -15,6 +15,7 @@ packages=(
   "cask claude-code claude"
   "cask codex codex"
   "formula pi-coding-agent pi"
+  "formula opencode opencode"
 )
 
 for entry in "${packages[@]}"; do
