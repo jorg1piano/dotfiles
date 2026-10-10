@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Download recent Android screen recordings into the current directory."""
+
+import argparse
+from pathlib import Path
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+
+
+def positive_count(value):
+    try:
+        count = int(value)
+        if count > 0:
+            return count
+    except ValueError:
+        pass
+    raise argparse.ArgumentTypeError("count must be a positive integer")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--count", type=positive_count, default=1,
+                        help="number of recordings to download (default: 1)")
+    parser.add_argument("--device", help="ADB serial (default: last entry in ~/dotfiles/.download-tool)")
+    args = parser.parse_args()
+    device = args.device
+    if not device:
+        config = Path.home() / "dotfiles/.download-tool"
+        entries = (config.read_text().splitlines() if config.exists() else [])
+        entries = [line.strip() for line in entries
+                   if line.strip() and not line.lstrip().startswith("#")]
+        if not entries:
+            parser.error(f"pass --device SERIAL or add a device ID to {config} (one per line)")
+        device = entries[-1]
+    if not shutil.which("adb"):
+        parser.error("adb is not on PATH; install Android platform-tools first")
+
+    def adb(*arguments, capture=False):
+        return subprocess.run(["adb", "-s", device, *arguments], check=True,
+                              stdout=subprocess.PIPE if capture else None)
+
+    adb("get-state", capture=True)
+    # NUL delimiters preserve spaces and newlines in Android filenames.
+    result = adb("exec-out", "find /sdcard/ -type f -print0", capture=True)
+    paths = [p.decode("utf-8") for p in result.stdout.split(b"\0") if p]
+    recordings = []
+    for path in paths:
+        if Path(path).suffix.lower() not in {".mp4", ".mkv", ".webm", ".3gp"}:
+            continue
+        if not re.search(r"screen[ _-]*record", path, re.IGNORECASE):
+            continue
+        # Quote for the remote shell, independently of local subprocess arguments.
+        modified = adb("exec-out", "stat -c %Y " + shlex.quote(path), capture=True)
+        recordings.append((int(modified.stdout.strip()), path))
+    recordings.sort(reverse=True)
+    if not recordings:
+        sys.exit("No screen recordings found under /sdcard/.")
+    if len(recordings) < args.count:
+        print(f"Found only {len(recordings)} recording(s).", file=sys.stderr)
+    for _, remote in recordings[:args.count]:
+        destination = Path.cwd() / Path(remote).name
+        suffix = 1
+        while destination.exists():
+            destination = Path.cwd() / f"{Path(remote).stem}-{suffix}{Path(remote).suffix}"
+            suffix += 1
+        print(f"Downloading {remote} to {destination}", flush=True)
+        adb("pull", remote, str(destination))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        sys.exit(f"Download failed: {error}")
