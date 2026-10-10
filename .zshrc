@@ -19,6 +19,7 @@ alias gc='git checkout '
 alias status='git status'
 alias staged="git diff --cached"
 alias diff="git diff"
+alias ss='git diff --name-only "$(git show-ref --verify --quiet refs/heads/master && echo master || echo main)..HEAD"'
 alias c='git commit'
 alias gca='git commit --amend'
 alias l="git log"
