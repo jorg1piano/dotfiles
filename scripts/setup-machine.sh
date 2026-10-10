@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the agent CLIs, window tools and LazyVim with Homebrew, then put the
+# Install the agent CLIs, window tools, Go and LazyVim with Homebrew, then put the
 # Rectangle, Hammerspoon and Neovim config from this repo in place. Safe to run again:
 # anything already installed, by brew or another installer, is skipped.
 #
@@ -46,6 +46,7 @@ packages=(
   "cask 1password /Applications/1Password.app"
   "cask 1password-cli op"
   "formula just just"
+  "formula go go"
   "formula neovim nvim"
   "formula ripgrep rg"
   "formula fd fd"
@@ -68,6 +69,36 @@ for entry in "${packages[@]}"; do
     brew install "--$kind" "$pkg"
   fi
 done
+
+# Go: brew's go is the latest stable release, so upgrade it when brew has a
+# newer one. The tools go into GOPATH/bin and are skipped once they exist.
+if brew list --formula go >/dev/null 2>&1 && [ -n "$(brew outdated --quiet go)" ]; then
+  echo "up    go $(go env GOVERSION)"
+  brew upgrade go
+fi
+echo "ok    $(go env GOVERSION)"
+
+gobin="$(go env GOPATH)/bin"
+go_tools=(
+  "gopls golang.org/x/tools/gopls"
+  "dlv github.com/go-delve/delve/cmd/dlv"
+  "goimports golang.org/x/tools/cmd/goimports"
+  "staticcheck honnef.co/go/tools/cmd/staticcheck"
+  "gotestsum gotest.tools/gotestsum"
+)
+for entry in "${go_tools[@]}"; do
+  read -r cmd module <<<"$entry"
+  if [ -x "$gobin/$cmd" ]; then
+    echo "ok    $cmd"
+  else
+    echo "add   $cmd"
+    go install "$module@latest"
+  fi
+done
+case ":$PATH:" in
+  *":$gobin:"*) ;;
+  *) echo "      $gobin is not on PATH. Add to ~/.zshrc: export PATH=\"$gobin:\$PATH\"" ;;
+esac
 
 # Rectangle: merge the repo's settings over whatever this Mac has. Rectangle
 # writes its prefs back when it quits, so it has to be closed during the import.
