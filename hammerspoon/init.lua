@@ -4,6 +4,10 @@ hyper = { "cmd", "alt", "ctrl" }
 -- Supress lanugage warning about unknown global variable
 hs = hs
 
+-- Cap every Accessibility call at 200 ms. An app that stops answering (a hung VLC once
+-- held each hotkey for 1.5 s) then costs at most that per call.
+hs.window.timeout(0.2)
+
 -- Reload hotkey
 hs.hotkey.bind(hyper, "R", function()
     hs.reload()
@@ -19,28 +23,6 @@ hs.hotkey.bind(hyper, "w", function()
     end
 end)
 
--- Window management
-shortcuts = {
-    { "j", "Visual Studio Code" },
-    { "k", "Ghostty" },
-    { "x", "ChatGPT" },
-    { "f", "Finder" },
-    { "l", "Slack" },
-    { "h", "Hammerspoon" },
-    { "d", "Docker Desktop" },
-    { "'", "Docker Desktop" },
-    { "g", "ChatGPT" },
-    { "m", "com.apple.mail" },
-    { "e", "qemu-system-aarch64" },
-    { "s", "Simulator" },
-}
-
-for i, shortcut in ipairs(shortcuts) do
-    hs.hotkey.bind(hyper, shortcut[1], function()
-        hs.application.launchOrFocus(shortcut[2])
-    end)
-end
-
 -- Screens ordered left-to-right
 local function sortedScreens()
     local screens = hs.screen.allScreens()
@@ -48,33 +30,35 @@ local function sortedScreens()
     return screens
 end
 
--- Standard, visible windows belonging to an app, in a stable order.
--- Chrome launched with separate --user-data-dir (one per profile) runs as several
--- processes sharing a bundle ID, and each process only reports its own windows via
--- app:allWindows(). Scanning every window and matching on bundle ID catches them all,
--- which is how the AppWindowSwitcher spoon spans profiles too.
-local function visibleStandardWindows(app)
+-- Every running process of an app. Chrome launched with separate --user-data-dir (one
+-- per profile) runs as several processes sharing a bundle ID, and each process only
+-- reports its own windows via app:allWindows().
+local function appProcesses(app)
     local bundleID = app:bundleID()
-    local appName = app:name()
+    if not bundleID then return { app } end
+    return hs.application.applicationsForBundleID(bundleID)
+end
 
+local function isSameApp(a, b)
+    if a:bundleID() then return a:bundleID() == b:bundleID() end
+    return a:pid() == b:pid()
+end
+
+-- Standard, visible windows belonging to an app, in a stable order. Only the app's own
+-- processes are asked for windows. hs.window.orderedWindows() asks every running app,
+-- which costs ~25 ms per app and stalls on any app that has stopped answering.
+local function visibleStandardWindows(app)
     local matched = {}
-    for _, win in ipairs(hs.window.orderedWindows()) do
-        local winApp = win:application()
-        if winApp and win:isStandard() and win:isVisible() then
-            local matches
-            if bundleID then
-                matches = winApp:bundleID() == bundleID
-            else
-                matches = winApp:name() == appName
-            end
-            if matches then
-                table.insert(matched, { win = win, pid = winApp:pid() })
+    for _, proc in ipairs(appProcesses(app)) do
+        for _, win in ipairs(proc:allWindows()) do
+            if win:isStandard() and win:isVisible() then
+                table.insert(matched, { win = win, pid = proc:pid() })
             end
         end
     end
 
-    -- orderedWindows is z-order, which shifts on every focus change. Sort by process
-    -- then window ID so repeated presses land the same windows in the same slots.
+    -- Sort by process then window ID so repeated presses land the same windows in the
+    -- same slots.
     table.sort(matched, function(a, b)
         if a.pid ~= b.pid then return a.pid < b.pid end
         return a.win:id() < b.win:id()
@@ -187,21 +171,57 @@ hs.hotkey.bind(hyper, "i", function()
     win:maximize()
 end)
 
-hs.loadSpoon("AppWindowSwitcher")
--- :setLogLevel("debug") -- uncomment for console debug log
-    :bindHotkeys({
-        ["Google Chrome"] = { hyper, ";" },
-        ["Code"] = { hyper, "j" },
-        ["Ghostty"] = { hyper, "k" },
-        ["Finder"] = { hyper, "f" },
-        ["Slack"] = { hyper, "l" },
-        ["Hammerspoon"] = { hyper, "h" },
-        ["Docker Desktop"] = { hyper, "d" },
-        ["ChatGPT"] = { hyper, "g" },
-        ["Mail"] = { hyper, "m" },
-        ["qemu-system-aarch64"] = { hyper, "e" },
-        ["Simulator"] = { hyper, "s" },
-    })
+-- Hyper+key app switching. When the app isn't frontmost, activate it: one call to the
+-- app, no window enumeration, and macOS brings its last-used window forward. When it is
+-- frontmost, raise its backmost window, so repeated presses cycle through all of them.
+local function focusApp(name, launchName)
+    local app = hs.application.get(name)
+    if not app then
+        hs.application.launchOrFocus(launchName or name)
+        return
+    end
+
+    local front = hs.application.frontmostApplication()
+    if not (front and isSameApp(front, app)) then
+        app:activate()
+        return
+    end
+
+    local byId = {}
+    for _, win in ipairs(visibleStandardWindows(app)) do
+        byId[win:id()] = win
+    end
+    -- Front-to-back window IDs straight from the window server, no Accessibility calls.
+    local ids = hs.window._orderedwinids()
+    for i = #ids, 1, -1 do
+        local win = byId[ids[i]]
+        if win then
+            win:raise():focus()
+            return
+        end
+    end
+end
+
+-- { key, running app name, name to launch with when it differs }
+local appHotkeys = {
+    { ";", "Google Chrome" },
+    { "j", "Code", "Visual Studio Code" },
+    { "k", "Ghostty" },
+    { "f", "Finder" },
+    { "l", "Slack" },
+    { "h", "Hammerspoon" },
+    { "d", "Docker Desktop" },
+    { "'", "Docker Desktop" },
+    { "g", "ChatGPT" },
+    { "x", "ChatGPT" },
+    { "m", "Mail" },
+    { "e", "qemu-system-aarch64" },
+    { "s", "Simulator" },
+}
+
+for _, entry in ipairs(appHotkeys) do
+    hs.hotkey.bind(hyper, entry[1], function() focusApp(entry[2], entry[3]) end)
+end
 
 -- Half-screen screenshots: hyper+shift+1..6 captures the matching half to clipboard.
 -- Screens sorted left-to-right; each screen contributes two halves (left then right).
