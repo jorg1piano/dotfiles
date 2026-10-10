@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Install the agent CLIs, window tools, Go and LazyVim with Homebrew, then put the
-# Rectangle, Hammerspoon and Neovim config from this repo in place. Safe to run again:
+# macOS settings and the Rectangle, Hammerspoon and Neovim config from this repo
+# in place. Safe to run again:
 # anything already installed, by brew or another installer, is skipped.
 #
 #   ./scripts/setup-machine.sh                 install and apply
-#   ./scripts/setup-machine.sh save-rectangle  copy this Mac's Rectangle settings into the repo
+#   ./scripts/setup-machine.sh save  copy this Mac's Rectangle settings, keyboard
+#                                    shortcuts and input sources into the repo
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
@@ -21,10 +23,11 @@ keep = {k: v for k, v in d.items() if not k.startswith(("NS", "SU")) and k != "l
 sys.stdout.buffer.write(plistlib.dumps(keep, sort_keys=True))'
 }
 
-if [ "${1:-}" = save-rectangle ]; then
+if [ "${1:-}" = save ]; then
   mkdir -p "$(dirname "$rectangle_plist")"
   rectangle_settings >"$rectangle_plist"
   echo "saved $rectangle_plist"
+  python3 -I "$repo/macos/defaults.py" save
   exit 0
 fi
 
@@ -100,6 +103,8 @@ case ":$PATH:" in
   *":$gobin:"*) ;;
   *) echo "      $gobin is not on PATH. Add to ~/.zshrc: export PATH=\"$gobin:\$PATH\"" ;;
 esac
+
+python3 -I "$repo/macos/defaults.py"
 
 # Rectangle: merge the repo's settings over whatever this Mac has. Rectangle
 # writes its prefs back when it quits, so it has to be closed during the import.
