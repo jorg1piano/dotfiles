@@ -43,6 +43,8 @@ packages=(
   "formula opencode opencode"
   "cask rectangle /Applications/Rectangle.app"
   "cask hammerspoon /Applications/Hammerspoon.app"
+  "cask 1password /Applications/1Password.app"
+  "cask 1password-cli op"
   "formula just just"
   "formula neovim nvim"
   "formula ripgrep rg"
