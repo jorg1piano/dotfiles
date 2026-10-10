@@ -4,6 +4,11 @@ default:
 # Install the tools and link every managed config into place.
 setup: brew-install herdr-link git-link nvim-link ghostty-link tools-install
 
+# Apply the macOS keyboard mappings from launchd/com.jorgen.keyremap.plist.
+# Run this from an interactive terminal so sudo can ask for your password.
+remap-keys:
+    sudo /usr/bin/hidutil property --set '{"UserKeyMapping":[{"HIDKeyboardModifierMappingSrc":0xFF00000003,"HIDKeyboardModifierMappingDst":0x700000029},{"HIDKeyboardModifierMappingSrc":0x700000029,"HIDKeyboardModifierMappingDst":0xFF00000003},{"HIDKeyboardModifierMappingSrc":0x700000039,"HIDKeyboardModifierMappingDst":0x700000029}]}'
+
 # Install the Homebrew formulae the configs depend on.
 brew-install:
     #!/usr/bin/env bash
