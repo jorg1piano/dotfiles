@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Install the agent CLIs and window tools with Homebrew, then put the Rectangle
-# shortcuts and Hammerspoon config from this repo in place. Safe to run again:
+# Install the agent CLIs, window tools and LazyVim with Homebrew, then put the
+# Rectangle, Hammerspoon and Neovim config from this repo in place. Safe to run again:
 # anything already installed, by brew or another installer, is skipped.
 #
 #   ./scripts/setup-machine.sh                 install and apply
@@ -43,6 +43,13 @@ packages=(
   "formula opencode opencode"
   "cask rectangle /Applications/Rectangle.app"
   "cask hammerspoon /Applications/Hammerspoon.app"
+  "formula just just"
+  "formula neovim nvim"
+  "formula ripgrep rg"
+  "formula fd fd"
+  "formula fzf fzf"
+  "formula lazygit lazygit"
+  "formula tree-sitter-cli tree-sitter"
 )
 
 for entry in "${packages[@]}"; do
@@ -115,3 +122,40 @@ for spoon in AppWindowSwitcher; do
     echo "add   $spoon.spoon"
   fi
 done
+
+# LazyVim: start from the upstream starter, point its keymaps and options at the
+# repo, then let `just nvim-link` link the plugin specs and patch lazy.lua.
+nvim_config="$HOME/.config/nvim"
+if [ -d "$nvim_config" ]; then
+  echo "ok    LazyVim starter"
+  fresh_nvim=0
+else
+  git clone -q https://github.com/LazyVim/starter "$nvim_config"
+  rm -rf "$nvim_config/.git"
+  echo "add   LazyVim starter"
+  fresh_nvim=1
+fi
+
+# Skip a file that already mentions the repo file, however it loads it.
+hook() {
+  file="$1" target="$2"
+  line="dofile(os.getenv(\"HOME\") .. \"/$target\")"
+  if grep -qF "$target" "$file" 2>/dev/null; then
+    echo "ok    $(basename "$file") loads the repo"
+  else
+    printf '\n-- Tracked in ~/dotfiles\n%s\n' "$line" >>"$file"
+    echo "set   $(basename "$file") loads the repo"
+  fi
+}
+hook "$nvim_config/lua/config/options.lua" dotfiles/nvim/options.lua
+hook "$nvim_config/lua/config/keymaps.lua" dotfiles/nvim/keymaps.lua
+
+just -f "$repo/justfile" nvim-link | sed 's/^/      /'
+
+# The first start would otherwise sit downloading plugins in front of you.
+# Mason's language tools still finish on that first start, and quitting while
+# they download makes nvim exit non-zero, which is not a failed setup.
+if [ "$fresh_nvim" -eq 1 ]; then
+  echo "add   LazyVim plugins"
+  nvim --headless "+Lazy! sync" +qa || echo "      Mason tools finish installing the first time you open nvim"
+fi
