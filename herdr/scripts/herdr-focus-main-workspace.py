@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focus the main checkout's workspace, or open it if none exists."""
+"""Close a workspace and return to main only while its original pane is focused."""
 
 import json
 import os
@@ -53,8 +53,26 @@ def focus_main(path):
     herdr("worktree", "open", "--cwd", main, "--path", main, "--focus")
 
 
+def close_and_focus_main(path, workspace, source_pane):
+    return_to_main = False
+    if source_pane:
+        try:
+            # Closing changes focus, so check immediately before the close.
+            snapshot = herdr("api", "snapshot")["snapshot"]
+            return_to_main = (
+                snapshot.get("focused_workspace_id") == workspace
+                and snapshot.get("focused_pane_id") == source_pane
+            )
+        except (OSError, ValueError, KeyError, RuntimeError, subprocess.CalledProcessError) as exc:
+            print(f"could not check focus; skipping return to main: {exc}", file=sys.stderr)
+
+    herdr("workspace", "close", workspace)
+    if return_to_main:
+        focus_main(path)
+
+
 if __name__ == "__main__":
     try:
-        focus_main(sys.argv[1])
+        close_and_focus_main(*sys.argv[1:])
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.CalledProcessError) as exc:
-        sys.exit(f"could not focus the main checkout: {exc}")
+        sys.exit(f"could not finish workspace cleanup: {exc}")
