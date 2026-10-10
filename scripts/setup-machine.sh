@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the agent CLIs, window tools, Go and LazyVim with Homebrew, then put the
+# Install the agent CLIs, window tools, Go, Python 3.13 and LazyVim with Homebrew, then put the
 # macOS settings and the Rectangle, Hammerspoon and Neovim config from this repo
 # in place. Safe to run again:
 # anything already installed, by brew or another installer, is skipped.
@@ -51,6 +51,7 @@ packages=(
   "cask slack /Applications/Slack.app"
   "formula just just"
   "formula go go"
+  "formula python@3.13 python3.13"
   "formula neovim nvim"
   "formula ripgrep rg"
   "formula fd fd"
