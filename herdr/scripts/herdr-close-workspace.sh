@@ -22,6 +22,7 @@ if [ "${1:-}" = "--pop" ]; then
   workspace=$3
   log=$4
   main=$5
+  source_pane="${6:-}"
   fail() {
     echo "$@" >&2
     python3 "$script_dir/herdr-show-cleanup-error.py" "$root" "$workspace" "$main" "$log" "$*" || true
@@ -39,14 +40,14 @@ if [ "${1:-}" = "--pop" ]; then
   wet worktree pop || fail "wet worktree pop failed; workspace left open"
   # The checkout no longer exists, so leave it before invoking Herdr.
   cd / || fail "cannot leave the removed checkout"
-  close_workspace || fail "worktree removed, but closing workspace $workspace failed"
-  python3 "$script_dir/herdr-focus-main-workspace.py" "$main" ||
-    fail "worktree closed, but returning to the main checkout failed"
+  python3 "$script_dir/herdr-focus-main-workspace.py" "$main" "$workspace" "$source_pane" ||
+    fail "worktree removed, but finishing Herdr cleanup failed"
   exit 0
 fi
 
 cwd="${HERDR_ACTIVE_PANE_CWD:-$PWD}"
 workspace="${HERDR_ACTIVE_WORKSPACE_ID:-}"
+source_pane="${HERDR_ACTIVE_PANE_ID:-}"
 [ -n "$workspace" ] || fail "No active Herdr workspace"
 command -v herdr >/dev/null 2>&1 || fail "herdr is not on PATH"
 cd "$cwd" 2>/dev/null || fail "cannot cd to $cwd"
@@ -64,18 +65,18 @@ if root=$(git rev-parse --show-toplevel 2>/dev/null) && [ -f "$root/.wet.yaml" ]
     echo "pop $root"
     echo "  wet worktree pop  # remove the checkout, keep the branch"
     echo "Cleanup will continue in the background and close this workspace when done."
-    echo "Herdr will then return to this repository's main checkout."
+    echo "Herdr will return to main if this pane is still focused when cleanup finishes."
     printf '\nproceed? [y/N] '
     IFS= read -r answer || exit 0
     case "$answer" in [Yy]*) ;; *) exit 0 ;; esac
 
-    python3 - "$script_dir/herdr-close-workspace.sh" "$root" "$workspace" <<'PY' || fail "cannot start worktree cleanup"
+    python3 - "$script_dir/herdr-close-workspace.sh" "$root" "$workspace" "$source_pane" <<'PY' || fail "cannot start worktree cleanup"
 import os
 import subprocess
 import sys
 import tempfile
 
-script, root, workspace = sys.argv[1:]
+script, root, workspace, source_pane = sys.argv[1:]
 # Git lists the main checkout first. Resolve it before pop removes the worktree.
 record = subprocess.check_output(
     ["git", "-C", root, "worktree", "list", "--porcelain", "-z"]
@@ -85,7 +86,7 @@ if not record.startswith(b"worktree "):
 main = os.fsdecode(record[len(b"worktree "):])
 with tempfile.NamedTemporaryFile(prefix="herdr-worktree-pop-", suffix=".log", delete=False) as log:
     subprocess.Popen(
-        ["/bin/sh", script, "--pop", root, workspace, log.name, main],
+        ["/bin/sh", script, "--pop", root, workspace, log.name, main, source_pane],
         stdin=subprocess.DEVNULL,
         stdout=log,
         stderr=subprocess.STDOUT,
