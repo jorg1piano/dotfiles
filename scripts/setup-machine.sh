@@ -49,6 +49,7 @@ packages=(
   "cask 1password /Applications/1Password.app"
   "cask 1password-cli op"
   "cask slack /Applications/Slack.app"
+  "formula flyctl fly"
   "formula just just"
   "formula go go"
   "formula python@3.13 python3.13"
