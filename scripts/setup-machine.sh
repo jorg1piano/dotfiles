@@ -50,6 +50,7 @@ packages=(
   "cask 1password-cli op"
   "cask slack /Applications/Slack.app"
   "formula flyctl fly"
+  "formula fastlane fastlane"
   "formula just just"
   "formula go go"
   "formula python@3.13 python3.13"
