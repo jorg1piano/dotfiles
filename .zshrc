@@ -9,6 +9,14 @@ alias config-hammerspoon='code ~/dotfiles/hammerspoon/init.lua'
 alias clip='pbcopy'
 alias past='pbpaste'
 
+# Claude Code launchers
+alias claude1='claude --model fable --effort high'
+alias claude2='claude --model opus --effort high'
+alias claude3='claude --model sonnet --effort high'
+alias c1='claude1'
+alias c2='claude2'
+alias c3='claude3'
+
 killPort() {
     kill -9 $(lsof -t -i:$1)
 }
