@@ -223,7 +223,7 @@ for _, entry in ipairs(appHotkeys) do
     hs.hotkey.bind(hyper, entry[1], function() focusApp(entry[2], entry[3]) end)
 end
 
--- Half-screen screenshots: hyper+shift+1..6 captures the matching half to clipboard.
+-- Half-screen screenshots: hyper+1..6 captures the matching half to clipboard.
 -- Screens sorted left-to-right; each screen contributes two halves (left then right).
 -- 1 = screen 1 left, 2 = screen 1 right, 3 = screen 2 left, 4 = screen 2 right, ...
 local function captureHalf(index)
@@ -250,6 +250,51 @@ end
 
 for i = 1, 6 do
     hs.hotkey.bind(hyper, tostring(i), function() captureHalf(i) end)
+end
+
+-- Half-screen recordings: hyper+shift+1..6 toggles a video recording of the
+-- matching half, same layout as the hyper+1..6 screenshots. First press starts,
+-- second press stops, saves the .mov to ~/Desktop and copies its path.
+local hyperShift = { "cmd", "alt", "ctrl", "shift" }
+local recordings = {}
+
+local function toggleRecordHalf(index)
+    local active = recordings[index]
+    if active then
+        -- screencapture finalizes the movie on SIGINT; the exit callback reports it.
+        active:interrupt()
+        return
+    end
+
+    local screens = sortedScreens()
+    local screenIdx = math.floor((index - 1) / 2) + 1
+    local isRight = (index % 2 == 0)
+    local screen = screens[screenIdx]
+    if not screen then
+        hs.alert.show("No screen at index " .. screenIdx)
+        return
+    end
+    local f = screen:frame()
+    local halfW = math.floor(f.w / 2)
+    local x = isRight and (f.x + halfW) or f.x
+    local rect = string.format("%d,%d,%d,%d", x, f.y, halfW, f.h)
+    local path = string.format("%s/Desktop/recording-half%d-%s.mov",
+        os.getenv("HOME"), index, os.date("%Y%m%d-%H%M%S"))
+
+    recordings[index] = hs.task.new("/usr/sbin/screencapture", function(exitCode)
+        recordings[index] = nil
+        if exitCode == 0 then
+            hs.pasteboard.setContents(path)
+            hs.alert.show("Half " .. index .. " recording saved (path copied)")
+        else
+            hs.alert.show("Recording failed (" .. exitCode .. ")")
+        end
+    end, { "-v", "-R", rect, path }):start()
+    hs.alert.show("Recording half " .. index .. "… press again to stop")
+end
+
+for i = 1, 6 do
+    hs.hotkey.bind(hyperShift, tostring(i), function() toggleRecordHalf(i) end)
 end
 
 -- hyper+7: capture the whole center screen and append it to a collection.
