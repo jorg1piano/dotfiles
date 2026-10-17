@@ -223,23 +223,22 @@ for _, entry in ipairs(appHotkeys) do
     hs.hotkey.bind(hyper, entry[1], function() focusApp(entry[2], entry[3]) end)
 end
 
--- Flash a translucent overlay over a captured region so it's obvious what was shot.
--- Called after screencapture exits, so the flash never lands in the image.
+-- Draw a red border around a captured region for a second so it's obvious what was shot.
+-- Called after screencapture exits, so the border never lands in the image.
 local function flashRect(rect)
     local c = hs.canvas.new(rect)
     c:level(hs.canvas.windowLevels.overlay)
     c:behavior({ "canJoinAllSpaces", "stationary" })
     c:appendElements({
         type = "rectangle",
-        action = "fill",
-        fillColor = { white = 1, alpha = 0.35 },
-        strokeColor = { white = 1, alpha = 0.9 },
-        strokeWidth = 6,
+        action = "stroke",
+        strokeColor = { red = 1, green = 0, blue = 0, alpha = 1 },
+        strokeWidth = 8,
     })
     c:show()
-    hs.timer.doAfter(0.12, function()
-        c:hide(0.25)
-        hs.timer.doAfter(0.3, function() c:delete() end)
+    hs.timer.doAfter(1, function()
+        c:hide(0.2)
+        hs.timer.doAfter(0.25, function() c:delete() end)
     end)
 end
 
