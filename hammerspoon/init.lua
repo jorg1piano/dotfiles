@@ -223,6 +223,26 @@ for _, entry in ipairs(appHotkeys) do
     hs.hotkey.bind(hyper, entry[1], function() focusApp(entry[2], entry[3]) end)
 end
 
+-- Flash a translucent overlay over a captured region so it's obvious what was shot.
+-- Called after screencapture exits, so the flash never lands in the image.
+local function flashRect(rect)
+    local c = hs.canvas.new(rect)
+    c:level(hs.canvas.windowLevels.overlay)
+    c:behavior({ "canJoinAllSpaces", "stationary" })
+    c:appendElements({
+        type = "rectangle",
+        action = "fill",
+        fillColor = { white = 1, alpha = 0.35 },
+        strokeColor = { white = 1, alpha = 0.9 },
+        strokeWidth = 6,
+    })
+    c:show()
+    hs.timer.doAfter(0.12, function()
+        c:hide(0.25)
+        hs.timer.doAfter(0.3, function() c:delete() end)
+    end)
+end
+
 -- Screenshot collection: the clipboard holds newline-separated paths of everything
 -- collected so far, so a single paste hands over every capture in order.
 -- hyper+9 starts a group (clears the collection); hyper+1..6 then save to files and
@@ -241,7 +261,8 @@ local function nextCapturePath()
     return string.format("%s/capture-%s-%d.png", captureDir, os.date("%Y%m%d-%H%M%S"), #capturedPaths + 1)
 end
 
-local function captureRectToCollection(rect, label)
+local function captureRectToCollection(frame, label)
+    local rect = string.format("%d,%d,%d,%d", frame.x, frame.y, frame.w, frame.h)
     local path = nextCapturePath()
     hs.task.new("/usr/sbin/screencapture", function(exitCode)
         if exitCode ~= 0 then
@@ -250,6 +271,7 @@ local function captureRectToCollection(rect, label)
         end
         table.insert(capturedPaths, path)
         setClipboardToCaptures()
+        flashRect(frame)
         hs.alert.show(string.format("%s (%d in group)", label, #capturedPaths))
     end, { "-x", "-R", rect, path }):start()
 end
@@ -270,13 +292,15 @@ local function captureHalf(index)
     local f = screen:frame()
     local halfW = math.floor(f.w / 2)
     local x = isRight and (f.x + halfW) or f.x
-    local rect = string.format("%d,%d,%d,%d", x, f.y, halfW, f.h)
+    local frame = { x = x, y = f.y, w = halfW, h = f.h }
     if groupActive then
-        captureRectToCollection(rect, "Half " .. index)
+        captureRectToCollection(frame, "Half " .. index)
         return
     end
+    local rect = string.format("%d,%d,%d,%d", x, f.y, halfW, f.h)
     hs.task.new("/usr/sbin/screencapture", function(exitCode)
         if exitCode == 0 then
+            flashRect(frame)
             hs.alert.show("Half " .. index .. " → clipboard")
         else
             hs.alert.show("Capture failed (" .. exitCode .. ")")
@@ -352,8 +376,7 @@ hs.hotkey.bind(hyper, "7", function()
         hs.alert.show("No center screen")
         return
     end
-    local f = screen:fullFrame()
-    captureRectToCollection(string.format("%d,%d,%d,%d", f.x, f.y, f.w, f.h), "Captured center screen")
+    captureRectToCollection(screen:fullFrame(), "Captured center screen")
 end)
 
 hs.hotkey.bind(hyper, "0", function()
