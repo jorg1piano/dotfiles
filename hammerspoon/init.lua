@@ -223,7 +223,39 @@ for _, entry in ipairs(appHotkeys) do
     hs.hotkey.bind(hyper, entry[1], function() focusApp(entry[2], entry[3]) end)
 end
 
--- Half-screen screenshots: hyper+1..6 captures the matching half to clipboard.
+-- Screenshot collection: the clipboard holds newline-separated paths of everything
+-- collected so far, so a single paste hands over every capture in order.
+-- hyper+9 starts a group (clears the collection); hyper+1..6 then save to files and
+-- append instead of copying an image. hyper+9 again stops the group. hyper+7 appends
+-- the center screen at any time. hyper+0 clears.
+local captureDir = os.getenv("HOME") .. "/Desktop/hs-captures"
+local capturedPaths = {}
+local groupActive = false
+
+local function setClipboardToCaptures()
+    hs.pasteboard.setContents(table.concat(capturedPaths, "\n"))
+end
+
+local function nextCapturePath()
+    hs.fs.mkdir(captureDir)
+    return string.format("%s/capture-%s-%d.png", captureDir, os.date("%Y%m%d-%H%M%S"), #capturedPaths + 1)
+end
+
+local function captureRectToCollection(rect, label)
+    local path = nextCapturePath()
+    hs.task.new("/usr/sbin/screencapture", function(exitCode)
+        if exitCode ~= 0 then
+            hs.alert.show("Capture failed (" .. exitCode .. ")")
+            return
+        end
+        table.insert(capturedPaths, path)
+        setClipboardToCaptures()
+        hs.alert.show(string.format("%s (%d in group)", label, #capturedPaths))
+    end, { "-x", "-R", rect, path }):start()
+end
+
+-- Half-screen screenshots: hyper+1..6 captures the matching half to clipboard, or into
+-- the group when hyper+9 has started one.
 -- Screens sorted left-to-right; each screen contributes two halves (left then right).
 -- 1 = screen 1 left, 2 = screen 1 right, 3 = screen 2 left, 4 = screen 2 right, ...
 local function captureHalf(index)
@@ -239,6 +271,10 @@ local function captureHalf(index)
     local halfW = math.floor(f.w / 2)
     local x = isRight and (f.x + halfW) or f.x
     local rect = string.format("%d,%d,%d,%d", x, f.y, halfW, f.h)
+    if groupActive then
+        captureRectToCollection(rect, "Half " .. index)
+        return
+    end
     hs.task.new("/usr/sbin/screencapture", function(exitCode)
         if exitCode == 0 then
             hs.alert.show("Half " .. index .. " → clipboard")
@@ -297,16 +333,18 @@ for i = 1, 6 do
     hs.hotkey.bind(hyperShift, tostring(i), function() toggleRecordHalf(i) end)
 end
 
--- hyper+7: capture the whole center screen and append it to a collection.
--- The clipboard holds the newline-separated paths of everything collected so far,
--- so repeated presses build up a set of screenshots to paste in one go.
--- hyper+0 clears the collection.
-local captureDir = os.getenv("HOME") .. "/Desktop/hs-captures"
-local capturedPaths = {}
-
-local function setClipboardToCaptures()
-    hs.pasteboard.setContents(table.concat(capturedPaths, "\n"))
-end
+hs.hotkey.bind(hyper, "9", function()
+    if groupActive then
+        groupActive = false
+        setClipboardToCaptures()
+        hs.alert.show(string.format("Group done: %d capture%s on clipboard", #capturedPaths, #capturedPaths == 1 and "" or "s"))
+    else
+        groupActive = true
+        capturedPaths = {}
+        setClipboardToCaptures()
+        hs.alert.show("Group started: hyper+1..6 to capture, hyper+9 to stop")
+    end
+end)
 
 hs.hotkey.bind(hyper, "7", function()
     local screen = hs.screen.primaryScreen()
@@ -314,26 +352,14 @@ hs.hotkey.bind(hyper, "7", function()
         hs.alert.show("No center screen")
         return
     end
-
-    hs.fs.mkdir(captureDir)
     local f = screen:fullFrame()
-    local rect = string.format("%d,%d,%d,%d", f.x, f.y, f.w, f.h)
-    local path = string.format("%s/capture-%s-%d.png", captureDir, os.date("%Y%m%d-%H%M%S"), #capturedPaths + 1)
-
-    hs.task.new("/usr/sbin/screencapture", function(exitCode)
-        if exitCode ~= 0 then
-            hs.alert.show("Capture failed (" .. exitCode .. ")")
-            return
-        end
-        table.insert(capturedPaths, path)
-        setClipboardToCaptures()
-        hs.alert.show(string.format("Captured center screen (%d in array)", #capturedPaths))
-    end, { "-x", "-R", rect, path }):start()
+    captureRectToCollection(string.format("%d,%d,%d,%d", f.x, f.y, f.w, f.h), "Captured center screen")
 end)
 
 hs.hotkey.bind(hyper, "0", function()
     local count = #capturedPaths
     capturedPaths = {}
+    groupActive = false
     setClipboardToCaptures()
     hs.alert.show(string.format("Cleared %d capture%s", count, count == 1 and "" or "s"))
 end)
