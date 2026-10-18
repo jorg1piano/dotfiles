@@ -279,36 +279,89 @@ end
 -- the group when hyper+9 has started one.
 -- Screens sorted left-to-right; each screen contributes two halves (left then right).
 -- 1 = screen 1 left, 2 = screen 1 right, 3 = screen 2 left, 4 = screen 2 right, ...
-local function captureHalf(index)
+-- Digits pressed within chordWindow seconds combine: consecutive halves merge into one
+-- rect (1,2 = all of screen 1), gaps give separate shots (1,2,5,6 = screens 1 and 3).
+-- Several shots in one chord always go to files, since the clipboard holds one image.
+local function halfFrame(index)
     local screens = sortedScreens()
     local screenIdx = math.floor((index - 1) / 2) + 1
     local isRight = (index % 2 == 0)
     local screen = screens[screenIdx]
-    if not screen then
-        hs.alert.show("No screen at index " .. screenIdx)
-        return
-    end
+    if not screen then return nil end
     local f = screen:frame()
     local halfW = math.floor(f.w / 2)
     local x = isRight and (f.x + halfW) or f.x
-    local frame = { x = x, y = f.y, w = halfW, h = f.h }
-    if groupActive then
-        captureRectToCollection(frame, "Half " .. index)
+    return { x = x, y = f.y, w = halfW, h = f.h }
+end
+
+local function unionFrame(a, b)
+    local x1, y1 = math.min(a.x, b.x), math.min(a.y, b.y)
+    local x2, y2 = math.max(a.x + a.w, b.x + b.w), math.max(a.y + a.h, b.y + b.h)
+    return { x = x1, y = y1, w = x2 - x1, h = y2 - y1 }
+end
+
+-- Turn a set of half indices into one frame per run of consecutive indices.
+local function chordFrames(indices)
+    table.sort(indices)
+    local runs = {}
+    local run
+    for _, i in ipairs(indices) do
+        local f = halfFrame(i)
+        if not f then
+            hs.alert.show("No screen for half " .. i)
+        elseif run and i == run.last then
+            -- same digit pressed twice; ignore
+        elseif run and i == run.last + 1 then
+            run.frame = unionFrame(run.frame, f)
+            run.last = i
+            run.label = run.label .. "," .. i
+        else
+            run = { frame = f, last = i, label = tostring(i) }
+            table.insert(runs, run)
+        end
+    end
+    return runs
+end
+
+local function captureChord(indices)
+    local runs = chordFrames(indices)
+    if #runs == 0 then return end
+    if groupActive or #runs > 1 then
+        for _, r in ipairs(runs) do
+            captureRectToCollection(r.frame, "Halves " .. r.label)
+        end
         return
     end
-    local rect = string.format("%d,%d,%d,%d", x, f.y, halfW, f.h)
+    local r = runs[1]
+    local f = r.frame
+    local rect = string.format("%d,%d,%d,%d", f.x, f.y, f.w, f.h)
     hs.task.new("/usr/sbin/screencapture", function(exitCode)
         if exitCode == 0 then
-            flashRect(frame)
-            hs.alert.show("Half " .. index .. " → clipboard")
+            flashRect(f)
+            hs.alert.show("Halves " .. r.label .. " → clipboard")
         else
             hs.alert.show("Capture failed (" .. exitCode .. ")")
         end
     end, { "-c", "-x", "-R", rect }):start()
 end
 
+local chordWindow = 0.35
+local pendingHalves = {}
+local chordTimer
+
+local function pressHalf(index)
+    table.insert(pendingHalves, index)
+    if chordTimer then chordTimer:stop() end
+    chordTimer = hs.timer.doAfter(chordWindow, function()
+        local indices = pendingHalves
+        pendingHalves = {}
+        chordTimer = nil
+        captureChord(indices)
+    end)
+end
+
 for i = 1, 6 do
-    hs.hotkey.bind(hyper, tostring(i), function() captureHalf(i) end)
+    hs.hotkey.bind(hyper, tostring(i), function() pressHalf(i) end)
 end
 
 -- Half-screen recordings: hyper+shift+1..6 toggles a video recording of the
