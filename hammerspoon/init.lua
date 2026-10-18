@@ -279,7 +279,7 @@ end
 -- the group when hyper+9 has started one.
 -- Screens sorted left-to-right; each screen contributes two halves (left then right).
 -- 1 = screen 1 left, 2 = screen 1 right, 3 = screen 2 left, 4 = screen 2 right, ...
--- Digits pressed within chordWindow seconds combine: consecutive halves merge into one
+-- Digits pressed within chordWindow seconds of each other combine: consecutive halves merge into one
 -- rect (1,2 = all of screen 1), gaps give separate shots (1,2,5,6 = screens 1 and 3).
 -- Several shots in one chord always go to files, since the clipboard holds one image.
 local function halfFrame(index)
@@ -345,7 +345,7 @@ local function captureChord(indices)
     end, { "-c", "-x", "-R", rect }):start()
 end
 
-local chordWindow = 0.35
+local chordWindow = 0.8
 local pendingHalves = {}
 local chordTimer
 
