@@ -281,7 +281,7 @@ end
 -- 1 = screen 1 left, 2 = screen 1 right, 3 = screen 2 left, 4 = screen 2 right, ...
 -- Digits pressed within chordWindow seconds of each other combine: consecutive halves merge into one
 -- rect (1,2 = all of screen 1), gaps give separate shots (1,2,5,6 = screens 1 and 3).
--- Several shots in one chord always go to files, since the clipboard holds one image.
+-- Non-contiguous halves are shot separately and stitched side by side into one image.
 local function halfFrame(index)
     local screens = sortedScreens()
     local screenIdx = math.floor((index - 1) / 2) + 1
@@ -323,26 +323,101 @@ local function chordFrames(indices)
     return runs
 end
 
+-- Stitch several PNGs side by side into one image.
+local function stitchImages(paths)
+    local images, totalW, maxH = {}, 0, 0
+    for _, path in ipairs(paths) do
+        local img = hs.image.imageFromPath(path)
+        if not img then return nil end
+        local sz = img:size()
+        table.insert(images, { img = img, w = sz.w, h = sz.h })
+        totalW = totalW + sz.w
+        maxH = math.max(maxH, sz.h)
+    end
+    local c = hs.canvas.new({ x = 0, y = 0, w = totalW, h = maxH })
+    local xOff = 0
+    for _, e in ipairs(images) do
+        c:appendElements({
+            type = "image",
+            image = e.img,
+            imageScaling = "none",
+            frame = { x = xOff, y = 0, w = e.w, h = e.h },
+        })
+        xOff = xOff + e.w
+    end
+    local out = c:imageFromCanvas()
+    c:delete()
+    return out
+end
+
+-- Capture each run to a temp file in order, then hand all paths to done().
+local function captureRunsToFiles(runs, done)
+    local paths = {}
+    local function step(i)
+        local r = runs[i]
+        if not r then return done(paths) end
+        local f = r.frame
+        local rect = string.format("%d,%d,%d,%d", f.x, f.y, f.w, f.h)
+        local path = string.format("%s/part-%s-%d.png", captureDir, os.date("%Y%m%d-%H%M%S"), i)
+        hs.task.new("/usr/sbin/screencapture", function(exitCode)
+            if exitCode ~= 0 then
+                hs.alert.show("Capture failed (" .. exitCode .. ")")
+                return
+            end
+            flashRect(f)
+            table.insert(paths, path)
+            step(i + 1)
+        end, { "-x", "-R", rect, path }):start()
+    end
+    hs.fs.mkdir(captureDir)
+    step(1)
+end
+
 local function captureChord(indices)
     local runs = chordFrames(indices)
     if #runs == 0 then return end
-    if groupActive or #runs > 1 then
-        for _, r in ipairs(runs) do
-            captureRectToCollection(r.frame, "Halves " .. r.label)
-        end
+    local labels = {}
+    for _, r in ipairs(runs) do table.insert(labels, r.label) end
+    local label = "Halves " .. table.concat(labels, "+")
+
+    if #runs == 1 and groupActive then
+        captureRectToCollection(runs[1].frame, label)
         return
     end
-    local r = runs[1]
-    local f = r.frame
-    local rect = string.format("%d,%d,%d,%d", f.x, f.y, f.w, f.h)
-    hs.task.new("/usr/sbin/screencapture", function(exitCode)
-        if exitCode == 0 then
-            flashRect(f)
-            hs.alert.show("Halves " .. r.label .. " → clipboard")
-        else
-            hs.alert.show("Capture failed (" .. exitCode .. ")")
+
+    if #runs == 1 then
+        local f = runs[1].frame
+        local rect = string.format("%d,%d,%d,%d", f.x, f.y, f.w, f.h)
+        hs.task.new("/usr/sbin/screencapture", function(exitCode)
+            if exitCode == 0 then
+                flashRect(f)
+                hs.alert.show(label .. " → clipboard")
+            else
+                hs.alert.show("Capture failed (" .. exitCode .. ")")
+            end
+        end, { "-c", "-x", "-R", rect }):start()
+        return
+    end
+
+    -- Non-contiguous halves: shoot each run, stitch into one image.
+    captureRunsToFiles(runs, function(paths)
+        local img = stitchImages(paths)
+        for _, p in ipairs(paths) do os.remove(p) end
+        if not img then
+            hs.alert.show("Stitch failed")
+            return
         end
-    end, { "-c", "-x", "-R", rect }):start()
+        if groupActive then
+            local path = nextCapturePath()
+            img:saveToFile(path)
+            table.insert(capturedPaths, path)
+            setClipboardToCaptures()
+            hs.alert.show(string.format("%s (%d in group)", label, #capturedPaths))
+        else
+            hs.pasteboard.writeObjects(img)
+            hs.alert.show(label .. " → clipboard")
+        end
+    end)
 end
 
 local chordWindow = 0.8
