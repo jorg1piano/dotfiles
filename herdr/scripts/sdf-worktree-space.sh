@@ -93,16 +93,17 @@ start_pane() {
 }
 
 # One command line, so each step only runs if the one before it succeeded:
-# setup claims a slot/pool item, reset prepares the reusable resources, start
-# boots this checkout's stack, and IEx attaches only after healthchecks pass.
-start_pane "$top" 'wet setup --headless && wet slot reset --headless && wet slot start --headless && just backend iex'
+# setup claims a slot/pool item and runs slot_reset on a newly claimed slot,
+# start boots this checkout's stack, and IEx attaches only after healthchecks
+# pass. No separate `wet slot reset`: setup already ran it, and a second one
+# repeats the whole reset. Setup done, the marker in this worktree's git dir
+# releases the app pane.
+start_pane "$top" 'wet setup --headless && touch "$(git rev-parse --git-dir)/wet-setup-done" && wet slot start --headless && just backend iex'
 
-# The app pane can be queued immediately, but it must not race setup. Wait for
-# .env.worktree (the slot's ports) and then for Phoenix to answer on this
-# slot's port before handing the terminal to flutter run. Any HTTP status
-# counts: `/` is a 404 on a host-routed landing page, and a 404 still means
-# Phoenix is up, `wet setup` finished long ago and every generated env file
-# the app needs is in place.
-start_pane "$bottom" 'while [ ! -f .env.worktree ]; do sleep 1; done; . ./.env.worktree; until curl -sS -o /dev/null "http://127.0.0.1:${PHX_PORT}/" 2>/dev/null; do sleep 2; done; just mobile run'
+# The app pane can be queued immediately, but it must not race setup: setup
+# writes the env files the build reads and its slot_reset uninstalls the app
+# from the emulator. It waits for setup only, not for Phoenix, so the Gradle
+# build overlaps the backend boot instead of starting after it.
+start_pane "$bottom" 'until [ -f "$(git rev-parse --git-dir)/wet-setup-done" ]; do sleep 1; done; just mobile run'
 
 start_pane "$pane" "nvm use 24 && $agent"
