@@ -96,12 +96,13 @@ description = "Move the focused space down in the sidebar."
 command = "$HOME/dotfiles/herdr/scripts/herdr-move-workspace.py down"
 
 # Scan open spaces and keep linked worktrees nested directly underneath their
-# main checkout. If the main checkout is not open, open it first.
+# main checkout. If the main checkout is not open, open it first. Then sort
+# repos, and the worktrees inside each, by their last commit.
 [[keys.command]]
 key = "prefix+alt+shift+r"
 type = "shell"
-description = "Reparent open worktree spaces under their main checkout."
-command = "$HOME/dotfiles/herdr/scripts/herdr-reparent-worktrees.py"
+description = "Reparent worktree spaces under their main checkout, then sort by last commit."
+command = "$HOME/dotfiles/herdr/scripts/herdr-reparent-worktrees.py && $HOME/dotfiles/herdr/scripts/herdr-sort-workspaces.py"
 
 # Pop the current worktree with `sdf worktree pop`, then close its workspace.
 [[keys.command]]
