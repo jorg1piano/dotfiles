@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Fix typos in the text on stdin and print the corrected text on stdout.
+# Used by the Hammerspoon hyper+y binding, but works from any pipe:
+#   pbpaste | fix-typos | pbcopy
+set -euo pipefail
+
+read -r -d '' SYSTEM_PROMPT <<'PROMPT' || true
+You are a typo fixer. The user message is a piece of text. Return the same text
+with spelling mistakes, obvious typos, and missing or doubled letters corrected.
+
+Rules:
+- Keep the wording, tone, meaning, language, line breaks, and formatting exactly as they are.
+- Do not rephrase, reorder, shorten, or expand anything.
+- Do not change code, URLs, file paths, identifiers, or names unless they are clearly misspelled words.
+- Only fix punctuation or capitalization when it is plainly a typo.
+- Output only the corrected text. No quotes, no explanation, no preamble.
+PROMPT
+
+exec claude -p \
+    --model haiku \
+    --tools "" \
+    --no-session-persistence \
+    --system-prompt "$SYSTEM_PROMPT" \
+    2>/dev/null

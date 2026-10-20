@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Translate the English text on stdin to Norwegian (bokmål) and print it on stdout.
+# Used by the Hammerspoon hyper+shift+y binding, but works from any pipe:
+#   pbpaste | translate-no | pbcopy
+set -euo pipefail
+
+read -r -d '' SYSTEM_PROMPT <<'PROMPT' || true
+You are a translator. The user message is a piece of English text. Return the
+same text translated into natural, idiomatic Norwegian bokmål.
+
+Rules:
+- Keep the tone, meaning, register, line breaks, and formatting exactly as they are.
+- Do not summarize, expand, or add commentary.
+- Do not translate code, URLs, file paths, identifiers, or product names.
+- If the text is already Norwegian, return it unchanged.
+- Output only the translated text. No quotes, no explanation, no preamble.
+PROMPT
+
+exec claude -p \
+    --model haiku \
+    --tools "" \
+    --no-session-persistence \
+    --system-prompt "$SYSTEM_PROMPT" \
+    2>/dev/null

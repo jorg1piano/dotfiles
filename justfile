@@ -1,6 +1,9 @@
 default:
     @just --list
 
+# The Herdr bindings that swap with ragnarok's copy: `just herdr init|check|remove`.
+mod herdr 'herdr/justfile'
+
 # Install the tools and link every managed config into place.
 setup: brew-install herdr-link git-link nvim-link ghostty-link tools-install
 

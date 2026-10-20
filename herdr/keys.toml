@@ -1,0 +1,18 @@
+# The personal half of the worktree binding, kept out of config.toml so that
+# `just herdr init` here and `just herdr init` in ragnarok can hand the key back
+# and forth without either of them losing the other's version.
+#
+# This one runs the script in this repo; ragnarok's runs the shared copy from
+# its own checkout. They do the same thing.
+
+# prefix+alt+shift+n (new): prompt for a branch, create the sibling folder
+# <project>-<branch>, check the worktree out into it with sdf, and open it as a
+# space split in two: claude on the left, `just setup && just run` on the right.
+# The ragnarok counterpart of prefix+u.
+[[keys.command]]
+key = "prefix+alt+shift+n"
+type = "popup"
+description = "Create an sdf worktree folder and open it with claude and just setup/run."
+command = "$HOME/dotfiles/herdr/scripts/sdf-worktree-new.sh"
+width = "70%"
+height = "40%"

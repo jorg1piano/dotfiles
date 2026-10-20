@@ -142,29 +142,17 @@ type = "shell"
 description = "Open the active pane's directory in VS Code."
 command = "code \"${HERDR_ACTIVE_PANE_CWD:-$PWD}\""
 
-# prefix+u (up): prompt for a slug, create a `wet` worktree for it, open it as a
+# prefix+u (up): prompt for a slug, create a `sdf` worktree for it, open it as a
 # child space of the current repo, and lay the whole solution out in three panes
-# — the agent on the left, `just setup && just stack up && just backend iex` in
-# the top right, `just mobile run` under it.
+# — the agent on the left, the slot setup/start + IEx in the top right,
+# `just mobile run` under it.
 [[keys.command]]
 key = "prefix+u"
 type = "popup"
-description = "Create a wet worktree and open it with agent, stack, IEx and the app."
-command = "$HOME/dotfiles/herdr/scripts/wet-worktree-space.sh"
+description = "Create a sdf worktree and open it with agent, stack, IEx and the app."
+command = "$HOME/dotfiles/herdr/scripts/sdf-worktree-space.sh"
 width = "70%"
 height = "40%"
-
-# prefix+alt+shift+d (down): the inverse of prefix+u. Runs `just stack nuke` in
-# the worktree, pops it with `wet worktree pop`, and closes its Herdr space.
-[[keys.command]]
-key = "prefix+alt+shift+d"
-type = "popup"
-description = "Nuke the wet worktree's stack, pop it, and close its space."
-command = "$HOME/dotfiles/herdr/scripts/wet-worktree-drop.sh"
-width = "70%"
-height = "40%"
-
-# Pick a command run in the active pane and yank it with all of its output.
 [[keys.command]]
 key = "prefix+shift+["
 type = "popup"
@@ -268,3 +256,36 @@ pi = [["state_icon", "workspace", "tab"], ["$summary"], ["$proof"], ["agent"]]
 # work summary in the pane's top-right corner (herdr/plugins/pane_context).
 [experimental]
 kitty_graphics = true
+
+# >>> ragnarok herdr keys: managed by `just herdr init`, do not edit inside >>>
+# Herdr keybindings for this repo, merged into ~/.config/herdr/config.toml by
+# `just herdr init` between its managed markers. Everything outside those
+# markers is left alone: your prefix, your own bindings, your theme. A binding
+# that already holds this key is taken over, and `just herdr init` in the repo
+# that used to hold it takes it back.
+#
+# $HOME is expanded by Herdr when it runs the command, and `just herdr init`
+# links this path at the repo's scripts/, so the binding does not depend on
+# which worktree you are standing in and picks up edits with no re-init.
+
+# prefix+alt+shift+n (new): prompt for a branch, create the sibling folder
+# <repo>-<branch>, mount a worktree in it with `sdf worktree create
+# --destination`, and open it as a child space split in two: the agent on the
+# left, `just setup init && just run` on the right. Set HERDR_AGENT to use something
+# other than claude.
+[[keys.command]]
+key = "prefix+alt+shift+n"
+type = "popup"
+description = "Ragnarok: new worktree space with the agent and just setup init && just run."
+command = "$HOME/.config/herdr/scripts/ragnarok/worktree-new.sh"
+width = "70%"
+height = "40%"
+
+[[keys.command]]
+key = "prefix+alt+shift+d"
+type = "popup"
+description = "Ragnarok: return to main and tear down this worktree in the background (branch kept)."
+command = "$HOME/.config/herdr/scripts/ragnarok/worktree-teardown.sh"
+width = "70%"
+height = "50%"
+# <<< ragnarok herdr keys <<<

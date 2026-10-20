@@ -690,4 +690,77 @@ hs.urlevent.bind("promptbox-paste", function()
     end
 end)
 
+-- Replace the selected text with the output of a stdin→stdout script.
+-- Copies the selection, runs it through the script, pastes the result over the
+-- selection, then puts the original clipboard back.
+-- opts: { working = "...", unchanged = "...", done = "...", name = "..." }
+local function replaceSelectionVia(script, opts)
+    local savedClipboard = hs.pasteboard.getContents()
+    local changeCount = hs.pasteboard.changeCount()
+
+    hs.eventtap.keyStroke({ "cmd" }, "c", 0)
+
+    -- Give the app a moment to put the selection on the clipboard.
+    hs.timer.doAfter(0.2, function()
+        local text = hs.pasteboard.getContents()
+        if hs.pasteboard.changeCount() == changeCount or not text or text == "" then
+            hs.alert.show("No text selected")
+            return
+        end
+
+        hs.alert.show(opts.working)
+        local stdout = {}
+        local task = hs.task.new("/bin/zsh", function(exitCode, _, stderr)
+            local result = table.concat(stdout)
+            if exitCode ~= 0 or result == "" then
+                hs.alert.show(opts.name .. " failed (" .. exitCode .. ")")
+                print(opts.name .. " stderr: " .. tostring(stderr))
+                hs.pasteboard.setContents(savedClipboard)
+                return
+            end
+            -- Model output ends with a newline the selection didn't have.
+            result = result:gsub("\n$", "")
+            if result == text then
+                hs.alert.show(opts.unchanged)
+                hs.pasteboard.setContents(savedClipboard)
+                return
+            end
+            hs.pasteboard.setContents(result)
+            hs.eventtap.keyStroke({ "cmd" }, "v", 0)
+            hs.alert.show(opts.done)
+            hs.timer.doAfter(0.3, function()
+                if savedClipboard then hs.pasteboard.setContents(savedClipboard) end
+            end)
+        end, function(_, out)
+            table.insert(stdout, out)
+            return true
+        end, { "-lc", "exec " .. script })
+        task:setInput(text)
+        task:start()
+        task:closeInput()
+    end)
+end
+
+-- hyper+y: fix typos in the selected text via scripts/fix-typos
+-- (claude -p with a fix-typos-only system prompt).
+hs.hotkey.bind(hyper, "y", function()
+    replaceSelectionVia(os.getenv("HOME") .. "/dotfiles/scripts/fix-typos", {
+        name = "fix-typos",
+        working = "Fixing typos…",
+        unchanged = "No typos found",
+        done = "Typos fixed",
+    })
+end)
+
+-- hyper+shift+y: translate the selected English text to Norwegian via
+-- scripts/translate-no.
+hs.hotkey.bind(hyperShift, "y", function()
+    replaceSelectionVia(os.getenv("HOME") .. "/dotfiles/scripts/translate-no", {
+        name = "translate-no",
+        working = "Translating to Norwegian…",
+        unchanged = "Already Norwegian",
+        done = "Translated",
+    })
+end)
+
 hs.alert.show("Config loaded")

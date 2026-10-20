@@ -1,0 +1,51 @@
+# The half of the Herdr config that swaps with ragnarok's: `just herdr init`.
+#
+# `herdr-link` in the root justfile links config.toml and the plugins, which is
+# the setup that never changes. This module owns the bindings that ragnarok's
+# own `just herdr init` also wants, so testing the shared version and coming
+# back to this one are both a single command.
+
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+here := source_directory()
+config := env('HOME') / '.config/herdr/config.toml'
+
+_default:
+    @just --list herdr
+
+[doc("Take the worktree bindings back from ragnarok (or whoever else holds them)")]
+init:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    chmod +x "{{ here }}"/scripts/*
+    backup="{{ config }}.bak-$(date +%Y%m%d%H%M%S)"
+    cp "{{ config }}" "$backup"
+    python3 "{{ here }}/merge-keys.py" "{{ config }}" "{{ here }}/keys.toml" --owner dotfiles
+    if ! herdr config check; then
+        cp "$backup" "{{ config }}"
+        echo "config check failed, restored $backup" >&2
+        exit 1
+    fi
+    herdr server reload-config >/dev/null 2>&1 && echo "reloaded the running Herdr server" || true
+
+[doc("Show which copy of the worktree bindings is installed")]
+check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for owner in dotfiles ragnarok; do
+        if python3 "{{ here }}/merge-keys.py" --installed "{{ config }}" --owner "$owner"; then
+            echo "installed: $owner"
+        fi
+    done
+    grep -q "herdr keys" "{{ config }}" || echo "installed: neither, run 'just herdr init'"
+    herdr config check
+
+[doc("Remove this repo's bindings block, leaving the key unbound")]
+remove:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    backup="{{ config }}.bak-$(date +%Y%m%d%H%M%S)"
+    cp "{{ config }}" "$backup"
+    python3 "{{ here }}/merge-keys.py" --remove "{{ config }}" --owner dotfiles
+    echo "removed the dotfiles block (backup: $backup)"
+    herdr server reload-config >/dev/null 2>&1 && echo "reloaded the running Herdr server" || true

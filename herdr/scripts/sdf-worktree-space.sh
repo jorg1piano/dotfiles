@@ -1,5 +1,5 @@
 #!/bin/sh
-# Prompt for a slug and a coding agent, create a `wet` worktree named after the
+# Prompt for a slug and a coding agent, create a `sdf` worktree named after the
 # slug, open that worktree as a child space of the current repo, and lay out the
 # whole solution in it: the agent in the space's root pane on the left, and a
 # column on the right with slot setup/start + IEx on top and `just mobile run`
@@ -15,7 +15,7 @@ set -u
 pause() { printf '\npress enter to close '; read -r _ || true; }
 fail() { echo "$@" >&2; pause; exit 1; }
 
-for tool in wet herdr jq; do
+for tool in sdf herdr jq; do
   command -v "$tool" >/dev/null 2>&1 || fail "$tool is not on PATH"
 done
 
@@ -58,14 +58,14 @@ while [ -z "$agent" ]; do
 done
 
 echo
-echo "wet worktree create $slug"
-# --no-multiplexer: Herdr manages the layout, a stray tmux window would fight it.
-created=$(wet worktree create "$slug" --no-multiplexer --json) ||
-  fail "wet worktree create $slug failed"
+echo "sdf worktree create $slug"
+# --cd: print only the worktree path, so no tmux window is spawned to fight
+# Herdr's layout and the path needs no parsing.
+path=$(sdf worktree create "$slug" --cd | tail -n 1) ||
+  fail "sdf worktree create $slug failed"
 
-path=$(printf '%s' "$created" | jq -r '.path // empty')
 [ -n "$path" ] && [ -d "$path" ] ||
-  fail "wet did not return a usable worktree path (got: '$created')"
+  fail "sdf did not return a usable worktree path (got: '$path')"
 
 echo "opening $path"
 opened=$(herdr_json worktree open --cwd "$main" --path "$path" --label "$slug" --focus)
