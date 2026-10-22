@@ -5,7 +5,7 @@ default:
 mod herdr 'herdr/justfile'
 
 # Install the tools and link every managed config into place.
-setup: brew-install herdr-link git-link nvim-link ghostty-link tools-install
+setup: brew-install herdr-link git-link nvim-link ghostty-link tools-install sectioned-install
 
 # Apply the macOS keyboard mappings from launchd/com.jorgen.keyremap.plist.
 # Run this from an interactive terminal so sudo can ask for your password.
@@ -233,6 +233,35 @@ saythis-install:
         echo "no API key yet. Write one to $conf:" >&2
         echo "  mkdir -p \"\$(dirname \"$conf\")\" && echo 'T2S=sk-...' > \"$conf\" && chmod 600 \"$conf\"" >&2
     fi
+
+# Where Sectioned is cloned. Hammerspoon's hyper+c opens sectioned://capture, and
+# Launch Services resolves that to whichever build/Sectioned.app was registered last.
+sectioned_dir := env("SECTIONED_DIR", env("HOME") / "github/devda/sectioned_screenshots")
+sectioned_repo := "https://github.com/jorg1piano/sectioned_screenshots.git"
+
+# Clone or fast-forward Sectioned, then build, sign and register build/Sectioned.app.
+sectioned-install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    command -v swift >/dev/null || { echo "swift is not on PATH — install Xcode or the Command Line Tools" >&2; exit 1; }
+
+    dir="{{sectioned_dir}}"
+    if [ -d "$dir/.git" ]; then
+        if [ -n "$(git -C "$dir" status --porcelain)" ]; then
+            echo "skipping pull: $dir has local changes"
+        else
+            git -C "$dir" pull --ff-only --quiet && echo "updated $dir"
+        fi
+    else
+        mkdir -p "$(dirname "$dir")"
+        git clone --quiet "{{sectioned_repo}}" "$dir"
+        echo "cloned $dir"
+    fi
+
+    "$dir/scripts/build-app.sh"
+    echo "hyper+c in Hammerspoon now opens $dir/build/Sectioned.app"
+    echo "first launch asks for Screen Recording permission; grant it in System Settings"
 
 # Poll for quiet agents every minute from crontab. Prefer panewatch-launchd on macOS.
 panewatch-cron: panewatch-install
