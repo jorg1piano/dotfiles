@@ -3,7 +3,7 @@
 # slug, open that worktree as a child space of the current repo, and lay out the
 # whole solution in it: the agent in the space's root pane on the left, and a
 # column on the right with slot setup/start + IEx on top and `just mobile run`
-# below. Long-running commands are sent to the panes and left there, so the
+# below. A web-only space (devices 0) has no emulator and no app pane. Long-running commands are sent to the panes and left there, so the
 # prefix+u popup returns immediately and another worktree can be dispatched
 # while this one is still bootstrapping.
 #
@@ -57,6 +57,22 @@ while [ -z "$agent" ]; do
   esac
 done
 
+# How many devices `wet setup` claims, or which emulator: web-only work needs
+# none, a chat between two accounts needs two.
+setup_flags=''
+devices=''
+while [ -z "$devices" ]; do
+  printf 'Devices [enter] 1  [0] web only  [2] [3]  or an AVD name: '
+  IFS= read -r answer || exit 0
+  case "$answer" in
+    ''|1) devices=1 ;;
+    0) devices=0; setup_flags=' --devices 0' ;;
+    [2-9]) devices=$answer; setup_flags=" --devices $answer" ;;
+    *[!A-Za-z0-9._:-]*) echo "an AVD name is letters, digits, dots, dashes and underscores" ;;
+    *) devices=1; setup_flags=" --device emulator:${answer#emulator:}" ;;
+  esac
+done
+
 echo
 echo "wet worktree create $slug"
 # --no-multiplexer: Herdr manages the layout, a stray tmux window would fight it.
@@ -74,13 +90,17 @@ pane=$(printf '%s' "$opened" | jq -r '.result.root_pane.pane_id // empty')
 
 # Three panes: the agent stays in the space's root pane on the left, and the
 # right half is a column — the stack and an IEx shell on top, the app below.
+# Web only leaves out the app pane.
 split=$(herdr_json pane split "$pane" --direction right --cwd "$path" --no-focus)
 top=$(printf '%s' "$split" | jq -r '.result.pane.pane_id // empty')
 [ -n "$top" ] || fail "herdr pane split returned no pane: $split"
 
-split=$(herdr_json pane split "$top" --direction down --cwd "$path" --no-focus)
-bottom=$(printf '%s' "$split" | jq -r '.result.pane.pane_id // empty')
-[ -n "$bottom" ] || fail "herdr pane split returned no pane: $split"
+bottom=''
+if [ "$devices" != 0 ]; then
+  split=$(herdr_json pane split "$top" --direction down --cwd "$path" --no-focus)
+  bottom=$(printf '%s' "$split" | jq -r '.result.pane.pane_id // empty')
+  [ -n "$bottom" ] || fail "herdr pane split returned no pane: $split"
+fi
 
 # Fire-and-forget a command into an interactive shell. `herdr pane run` owns the
 # pane until the command finishes; using it for setup made prefix+u stay busy for
@@ -98,12 +118,14 @@ start_pane() {
 # pass. No separate `wet slot reset`: setup already ran it, and a second one
 # repeats the whole reset. Setup done, the marker in this worktree's git dir
 # releases the app pane.
-start_pane "$top" 'wet setup --headless && touch "$(git rev-parse --git-dir)/wet-setup-done" && wet slot start --headless && just backend iex'
+start_pane "$top" "wet setup --headless$setup_flags"' && touch "$(git rev-parse --git-dir)/wet-setup-done" && wet slot start --headless && just backend iex'
 
 # The app pane can be queued immediately, but it must not race setup: setup
 # writes the env files the build reads and its slot_reset uninstalls the app
 # from the emulator. It waits for setup only, not for Phoenix, so the Gradle
 # build overlaps the backend boot instead of starting after it.
-start_pane "$bottom" 'until [ -f "$(git rev-parse --git-dir)/wet-setup-done" ]; do sleep 1; done; just mobile run'
+if [ -n "$bottom" ]; then
+  start_pane "$bottom" 'until [ -f "$(git rev-parse --git-dir)/wet-setup-done" ]; do sleep 1; done; just mobile run'
+fi
 
 start_pane "$pane" "nvm use 24 && $agent"
