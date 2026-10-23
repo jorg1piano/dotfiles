@@ -1,5 +1,5 @@
 #!/bin/sh
-# Prompt for a slug and a coding agent, create a `wet` worktree named after the
+# Prompt for a base (when forking a feature branch), a slug and a coding agent, create a `wet` worktree named after the
 # slug, open that worktree as a child space of the current repo, and lay out the
 # whole solution in it: the agent in the space's root pane on the left, and a
 # column on the right with slot setup/start + IEx on top and `just mobile run`
@@ -38,6 +38,28 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
 # ("linked_worktree_source"), so anchor the open on the main checkout — the
 # current pane may already sit in a worktree.
 main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+
+# From a pane on a feature branch, offer to fork it: the new worktree starts at
+# that branch's tip instead of trunk. `wet worktree create` always branches off
+# trunk, so the fork resets the fresh worktree before anything is set up in it.
+base=''
+current=$(git symbolic-ref --short -q HEAD || true)
+case "$current" in
+  ''|main|master) ;;
+  *)
+    while :; do
+      printf 'Base [enter] %s  [m] trunk  or a ref: ' "$current"
+      IFS= read -r answer || exit 0
+      case "$answer" in
+        '') ref=$current ;;
+        m|main|master|trunk) break ;;
+        *) ref=$answer ;;
+      esac
+      base=$(git rev-parse -q --verify "$ref^{commit}") && break
+      echo "no commit named $ref"
+    done
+    ;;
+esac
 
 printf 'Slug for the new space: '
 IFS= read -r slug || exit 0
@@ -82,6 +104,11 @@ created=$(wet worktree create "$slug" --no-multiplexer --json) ||
 path=$(printf '%s' "$created" | jq -r '.path // empty')
 [ -n "$path" ] && [ -d "$path" ] ||
   fail "wet did not return a usable worktree path (got: '$created')"
+
+if [ -n "$base" ]; then
+  echo "forking $ref ($(git rev-parse --short "$base"))"
+  git -C "$path" reset -q --hard "$base" || fail "could not reset $path to $ref"
+fi
 
 echo "opening $path"
 opened=$(herdr_json worktree open --cwd "$main" --path "$path" --label "$slug" --focus)
