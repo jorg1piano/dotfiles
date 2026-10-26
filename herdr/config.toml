@@ -22,6 +22,19 @@ new_worktree = ""
 # Let the close helper pop wet worktrees before closing their workspace.
 close_workspace = ""
 
+# prefix+x opens the command palette below, so closing a pane moves to prefix+alt+x.
+close_pane = "prefix+alt+x"
+
+# Fuzzy-search every Herdr command by name ("split vertical", "rename tab", ...)
+# and run it. Also lists the [[keys.command]] entries and plugin actions.
+[[keys.command]]
+key = "prefix+x"
+type = "popup"
+description = "Search and run a Herdr command."
+command = "$HOME/dotfiles/herdr/scripts/herdr-command-palette.py"
+width = "70%"
+height = "60%"
+
 [[keys.command]]
 key = "prefix+shift+d"
 type = "popup"
