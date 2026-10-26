@@ -253,6 +253,24 @@ claude = [["state_icon", "workspace", "tab"], ["$summary"], ["$proof"], ["agent"
 codex = [["state_icon", "workspace", "tab"], ["$summary"], ["$proof"], ["agent"]]
 pi = [["state_icon", "workspace", "tab"], ["$summary"], ["$proof"], ["agent"]]
 
+# PR/CI state next to each space's dot, reported by the branch-status plugin
+# (herdr/plugins/branch_status). The plugin sets at most one of these tokens per
+# space, so each can have its own colour here; the unset ones stay blank.
+[ui.sidebar.spaces]
+rows = [
+  [
+    "state_icon",
+    { token = "$merged", fg = "#cba6f7" },
+    { token = "$closed", dim = true },
+    { token = "$failed", fg = "#f38ba8", bold = true },
+    { token = "$running", fg = "#fab387" },
+    { token = "$passed", fg = "#a6e3a1" },
+    { token = "$draft", dim = true },
+    "workspace",
+  ],
+  ["branch", "git_status"],
+]
+
 # Pane graphics overlays, used by the pane-context plugin to draw the current
 # work summary in the pane's top-right corner (herdr/plugins/pane_context).
 [experimental]

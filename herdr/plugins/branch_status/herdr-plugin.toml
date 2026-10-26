@@ -1,0 +1,36 @@
+id = "jorgen.branchstatus"
+name = "branchstatus"
+version = "0.1.0"
+# workspace metadata tokens and $token rows in [ui.sidebar.spaces] both land in
+# 0.8.0; nothing older has been checked.
+min_herdr_version = "0.8.0"
+description = "Show each worktree space's PR and CI state (merged, checks running, failed, passed) next to its sidebar dot."
+platforms = ["macos", "linux"]
+
+# Focusing a space is the cheapest trigger that still keeps the icons current:
+# the hook returns at once and a detached worker does the gh calls, throttled so
+# flicking through spaces costs at most one pass a minute. While any branch has
+# checks running, the worker keeps polling on its own until they settle.
+[[events]]
+on = "workspace.focused"
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/branch_status.py\" hook"]
+
+[[events]]
+on = "worktree.created"
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/branch_status.py\" hook"]
+
+[[events]]
+on = "worktree.opened"
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/branch_status.py\" hook"]
+
+[[actions]]
+id = "refresh"
+title = "branchstatus: refresh PR/CI icons now"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/branch_status.py\" refresh"]
+
+[[actions]]
+id = "clear"
+title = "branchstatus: clear all PR/CI icons"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/branch_status.py\" clear"]
