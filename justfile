@@ -260,6 +260,17 @@ sectioned-install:
     fi
 
     "$dir/scripts/build-app.sh"
+
+    # A running copy keeps the old binary loaded, so quit it and launch the new build.
+    if pgrep -f 'Sectioned.app/Contents/MacOS/Sectioned' >/dev/null; then
+        osascript -e 'tell application id "no.devda.Sectioned" to quit' >/dev/null 2>&1 || true
+        for _ in 1 2 3 4 5; do
+            pgrep -f 'Sectioned.app/Contents/MacOS/Sectioned' >/dev/null || break
+            sleep 1
+        done
+        pkill -f 'Sectioned.app/Contents/MacOS/Sectioned' || true
+    fi
+    open "$dir/build/Sectioned.app"
     echo "hyper+c in Hammerspoon now opens $dir/build/Sectioned.app"
     echo "first launch asks for Screen Recording permission; grant it in System Settings"
 

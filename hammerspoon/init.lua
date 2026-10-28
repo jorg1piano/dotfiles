@@ -441,9 +441,68 @@ end
 
 -- Half-screen recordings: hyper+shift+1..6 toggles a video recording of the
 -- matching half, same layout as the hyper+1..6 screenshots. First press starts,
--- second press stops, saves the .mov to ~/Desktop and copies its path.
+-- second press stops, saves the .mov to ~/Desktop and copies its path. Clicks are
+-- drawn into the video (-k).
 local hyperShift = { "cmd", "alt", "ctrl", "shift" }
 local recordings = {}
+
+-- While any half recording runs, shift+drag draws a red rectangle on screen so viewers
+-- can see what's being pointed at. The drag is swallowed, so apps don't see shift-clicks
+-- until recording stops. Each rectangle fades out a few seconds after release.
+local annotation = { start = nil, canvas = nil }
+
+local function annotationFrame(a, b)
+    return {
+        x = math.min(a.x, b.x), y = math.min(a.y, b.y),
+        w = math.max(math.abs(a.x - b.x), 1), h = math.max(math.abs(a.y - b.y), 1),
+    }
+end
+
+local annotationTap = hs.eventtap.new({
+    hs.eventtap.event.types.leftMouseDown,
+    hs.eventtap.event.types.leftMouseDragged,
+    hs.eventtap.event.types.leftMouseUp,
+}, function(event)
+    local kind = event:getType()
+    local types = hs.eventtap.event.types
+    local pos = event:location()
+
+    if kind == types.leftMouseDown then
+        if not event:getFlags().shift then return false end
+        annotation.start = pos
+        local c = hs.canvas.new(annotationFrame(pos, pos))
+        c:level(hs.canvas.windowLevels.overlay)
+        c:behavior({ "canJoinAllSpaces", "stationary" })
+        c:clickActivating(false)
+        c:appendElements({
+            type = "rectangle",
+            action = "stroke",
+            strokeColor = { red = 1, green = 0, blue = 0, alpha = 1 },
+            strokeWidth = 4,
+        })
+        c:show()
+        annotation.canvas = c
+        return true
+    end
+
+    if not annotation.start then return false end
+
+    if kind == types.leftMouseDragged then
+        annotation.canvas:frame(annotationFrame(annotation.start, pos))
+    else
+        local c = annotation.canvas
+        annotation.start, annotation.canvas = nil, nil
+        hs.timer.doAfter(3, function()
+            c:hide(0.4)
+            hs.timer.doAfter(0.5, function() c:delete() end)
+        end)
+    end
+    return true
+end)
+
+local function updateAnnotationTap()
+    if next(recordings) then annotationTap:start() else annotationTap:stop() end
+end
 
 local function toggleRecordHalf(index)
     local active = recordings[index]
@@ -470,14 +529,16 @@ local function toggleRecordHalf(index)
 
     recordings[index] = hs.task.new("/usr/sbin/screencapture", function(exitCode)
         recordings[index] = nil
+        updateAnnotationTap()
         if exitCode == 0 then
             hs.pasteboard.setContents(path)
             hs.alert.show("Half " .. index .. " recording saved (path copied)")
         else
             hs.alert.show("Recording failed (" .. exitCode .. ")")
         end
-    end, { "-v", "-R", rect, path }):start()
-    hs.alert.show("Recording half " .. index .. "… press again to stop")
+    end, { "-v", "-k", "-R", rect, path }):start()
+    updateAnnotationTap()
+    hs.alert.show("Recording half " .. index .. "… shift+drag to highlight, press again to stop")
 end
 
 for i = 1, 6 do
