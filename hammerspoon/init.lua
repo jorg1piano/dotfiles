@@ -441,10 +441,22 @@ end
 
 -- Half-screen recordings: hyper+shift+1..6 toggles a video recording of the
 -- matching half, same layout as the hyper+1..6 screenshots. First press starts,
--- second press stops, saves the .mov to ~/Desktop and copies its path. Clicks are
--- drawn into the video (-k).
+-- second press stops, saves the .mov to its own folder on ~/Desktop and copies its
+-- path. Clicks are drawn into the video (-k), and every left-click release also saves
+-- a screenshot of the recorded half next to the .mov, so the folder doubles as a
+-- step-by-step record of the clip.
 local hyperShift = { "cmd", "alt", "ctrl", "shift" }
 local recordings = {}
+-- Per running recording: the captured rect, its folder and the click screenshot count.
+local recordingInfo = {}
+
+local function captureClickShots()
+    for _, info in pairs(recordingInfo) do
+        info.clicks = info.clicks + 1
+        local path = string.format("%s/click-%03d-%s.png", info.dir, info.clicks, os.date("%H%M%S"))
+        hs.task.new("/usr/sbin/screencapture", nil, { "-x", "-R", info.rect, path }):start()
+    end
+end
 
 -- While any half recording runs, shift+drag draws a red rectangle on screen so viewers
 -- can see what's being pointed at. The drag is swallowed, so apps don't see shift-clicks
@@ -466,6 +478,8 @@ local annotationTap = hs.eventtap.new({
     local kind = event:getType()
     local types = hs.eventtap.event.types
     local pos = event:location()
+
+    if kind == types.leftMouseUp then captureClickShots() end
 
     if kind == types.leftMouseDown then
         if not event:getFlags().shift then return false end
@@ -524,15 +538,20 @@ local function toggleRecordHalf(index)
     local halfW = math.floor(f.w / 2)
     local x = isRight and (f.x + halfW) or f.x
     local rect = string.format("%d,%d,%d,%d", x, f.y, halfW, f.h)
-    local path = string.format("%s/Desktop/recording-half%d-%s.mov",
+    local dir = string.format("%s/Desktop/recording-half%d-%s",
         os.getenv("HOME"), index, os.date("%Y%m%d-%H%M%S"))
+    hs.fs.mkdir(dir)
+    local path = dir .. "/recording.mov"
+    recordingInfo[index] = { rect = rect, dir = dir, clicks = 0 }
 
     recordings[index] = hs.task.new("/usr/sbin/screencapture", function(exitCode)
-        recordings[index] = nil
+        local clicks = recordingInfo[index].clicks
+        recordings[index], recordingInfo[index] = nil, nil
         updateAnnotationTap()
         if exitCode == 0 then
             hs.pasteboard.setContents(path)
-            hs.alert.show("Half " .. index .. " recording saved (path copied)")
+            hs.alert.show(string.format("Half %d recording saved with %d click shots (path copied)",
+                index, clicks))
         else
             hs.alert.show("Recording failed (" .. exitCode .. ")")
         end

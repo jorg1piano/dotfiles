@@ -158,6 +158,15 @@ type = "shell"
 description = "Open the active pane's directory in VS Code."
 command = "code \"${HERDR_ACTIVE_PANE_CWD:-$PWD}\""
 
+# Open the PR for the branch checked out in the active pane's directory.
+[[keys.command]]
+key = "prefix+alt+o"
+type = "popup"
+description = "Open the PR for the active pane's branch in the browser."
+command = "$HOME/dotfiles/herdr/scripts/herdr-open-pr.sh"
+width = "60%"
+height = "20%"
+
 # prefix+u (up): prompt for a slug, create a `wet` worktree for it, open it as a
 # child space of the current repo, and lay the whole solution out in three panes
 # — the agent on the left, the slot setup/start + IEx in the top right,
